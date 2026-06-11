@@ -1,0 +1,172 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile with role, plan, and rank information.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["Admin", "User"] },
+        "plan": { "type": "string", "enum": ["Gratis", "Premium"] },
+        "gender": { "type": "string", "enum": ["Hombre", "Mujer"] },
+        "current_rank": { "type": "string" },
+        "points": { "type": "integer" },
+        "trophies": { "type": "integer" },
+        "fecha_ultimo_regalo": { "type": "string" },
+        "regalos_hoy": { "type": "integer" }
+      },
+      "required": ["id", "name", "email", "role", "plan"]
+    },
+    "Audiobook": {
+      "title": "Audiobook",
+      "description": "Metadata for an audiobook resource.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "description": { "type": "string" },
+        "duration_seconds": { "type": "integer" },
+        "category": { "type": "string" },
+        "is_premium": { "type": "boolean" },
+        "audio_url": { "type": "string", "format": "uri" },
+        "cover_url": { "type": "string", "format": "uri" },
+        "plays": { "type": "integer" },
+        "rating": { "type": "number" },
+        "uploadedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "author", "audio_url", "cover_url"]
+    },
+    "Book": {
+      "title": "Book",
+      "description": "Recommended books in the platform.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "author": { "type": "string" },
+        "review": { "type": "string" },
+        "rating": { "type": "number" },
+        "cover_url": { "type": "string", "format": "uri" },
+        "type": { "type": "string" },
+        "viewCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["title", "author"]
+    },
+    "EditorialSlot": {
+      "title": "Editorial Slot",
+      "description": "Scheduled recommendations for audios and books.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["weekly_audio", "monthly_book"] },
+        "contentId": { "type": "string" },
+        "startDate": { "type": "string", "format": "date-time" },
+        "endDate": { "type": "string", "format": "date-time" },
+        "isPriority": { "type": "boolean" }
+      },
+      "required": ["type", "contentId", "startDate", "endDate"]
+    },
+    "NayaMemory": {
+      "title": "Naya AI Memory",
+      "description": "Stores context and summaries for the Naya AI interactions with a specific user.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "user_id": { "type": "string" },
+        "last_interaction_timestamp": { "type": "string", "format": "date-time" },
+        "short_term_context": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "long_term_summary": { "type": "string" }
+      },
+      "required": ["user_id"]
+    },
+    "InspiraEvent": {
+      "title": "Inspira Event",
+      "description": "Training events, either live Zoom meetings or recorded sessions.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "url": { "type": "string", "format": "uri" },
+        "status": { "type": "string", "enum": ["live", "recorded"] }
+      },
+      "required": ["title", "date", "url", "status"]
+    },
+    "AppConfig": {
+      "title": "App Config",
+      "description": "Global configuration for the application.",
+      "type": "object",
+      "properties": {
+        "whatsappVentas": { "type": "string" },
+        "whatsappSoporte": { "type": "string" },
+        "bankDetails": {
+          "type": "object",
+          "properties": {
+            "banco": { "type": "string" },
+            "titular": { "type": "string" },
+            "cuenta": { "type": "string" },
+            "clabe": { "type": "string" }
+          }
+        }
+      }
+    },
+    "Playlist": {
+      "title": "User Playlist",
+      "description": "User-created playlist for audiobooks.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "audioIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "name", "audioIds"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Main user records."
+    },
+    "/userPlaylists/{playlistId}": {
+      "schema": "Playlist",
+      "description": "User playlists."
+    },
+    "/audiobooks/{audiobookId}": {
+      "schema": "Audiobook",
+      "description": "Collection of audiobooks available to users."
+    },
+    "/naya_memory/{memoryId}": {
+      "schema": "NayaMemory",
+      "description": "AI memory records keyed by unique ID, referencing a user_id."
+    },
+    "/events/{eventId}": {
+      "schema": "InspiraEvent",
+      "description": "Live and recorded training events."
+    },
+    "/config/global": {
+      "schema": "AppConfig",
+      "description": "Global application configuration (WhatsApp, Bank details)."
+    },
+    "/books/{bookId}": {
+      "schema": "Book",
+      "description": "Recommended books."
+    },
+    "/editorial_calendar/{slotId}": {
+      "schema": "EditorialSlot",
+      "description": "Scheduled editorial content."
+    }
+  }
+}

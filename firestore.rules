@@ -1,0 +1,140 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Phase 3: Primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid)) 
+             && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin';
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+    
+    // User Validation
+    function isValidUser(data) {
+      return data.keys().hasAll(['id', 'name', 'email', 'role', 'plan']) 
+             && data.id == request.auth.uid
+             && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+             && data.email is string && data.email.size() <= 100
+             && data.role in ['Admin', 'User']
+             && data.plan in ['Gratis', 'Premium'];
+    }
+
+    // Audiobook Validation
+    function isValidAudiobook(data) {
+      return data.keys().hasAll(['title', 'author', 'audio_url', 'cover_url'])
+             && data.title is string && data.title.size() <= 200
+             && data.author is string && data.author.size() <= 100
+             && data.audio_url is string && data.audio_url.size() <= 1000
+             && data.cover_url is string && data.cover_url.size() <= 1000;
+    }
+
+    // Naya Memory Validation
+    function isValidNayaMemory(data) {
+      return data.keys().hasAll(['user_id'])
+             && data.user_id == request.auth.uid
+             && (!('short_term_context' in data) || data.short_term_context is list)
+             && (!('long_term_summary' in data) || data.long_term_summary is string);
+    }
+
+    // 1. Users Collection
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin(); // Regular users cannot list all users
+      
+      allow create: if isSignedIn() && isValidId(userId) && userId == request.auth.uid && isValidUser(incoming())
+                       && incoming().role == 'User' && (incoming().plan == 'Gratis' || incoming().plan == 'Free'); 
+      
+      allow update: if (isOwner(userId) && (
+        // Action: Update Profile & Metrics & Onboarding
+        (incoming().diff(existing()).affectedKeys().hasAny([
+          'name', 'gender', 'current_rank', 'customAddress', 'country', 'state', 'city',
+          'birthDate', 'birthdate', 'phone', 'fcmToken', 'notificationStatus',
+          'lastNotificationPromptDate', 'onboardingCompleted',
+          'streakCount', 'lastActiveDate', 'xp', 'fecha_ultimo_regalo', 'regalos_hoy',
+          'dailyPassesUsed', 'lastPassUsageDate', 'completedAudios', 'unlockedMedalIds'
+        ]))
+      )) || isAdmin();
+    }
+
+    // 2. Audiobooks Collection
+    match /audiobooks/{audiobookId} {
+      allow read: if isSignedIn(); // All authenticated users can see audiobooks
+      
+      allow write: if isAdmin(); // Only admins can modify the library
+    }
+
+    // 3. Naya Memory
+    match /naya_memory/{memoryId} {
+      allow read, write: if isSignedIn() && (
+        (existing() != null && existing().user_id == request.auth.uid) ||
+        (incoming() != null && incoming().user_id == request.auth.uid)
+      );
+    }
+
+    // 4. Speakers Collection
+    match /speakers/{speakerId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 5. Events Collection
+    match /events/{eventId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 6. Config Collection
+    match /config/{configId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 7. Editorial Calendar Collection
+    match /editorial_calendar/{slotId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 8. Books Collection
+    match /books/{bookId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // 9. User Playlists Collection
+    match /userPlaylists/{playlistId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && existing().userId == request.auth.uid;
+    }
+
+    // 10. Success Paths Collection
+    match /success_paths/{pathId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+  }
+}
