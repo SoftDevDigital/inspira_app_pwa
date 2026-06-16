@@ -4,14 +4,14 @@
  */
 
 import { Crown, Star, ChevronRight } from 'lucide-react';
-import { SPEAKERS } from '../constants';
 import { Speaker } from '../types';
 
 interface StarTalentProps {
   onSelectSpeaker: (speaker: Speaker) => void;
+  speakers?: Speaker[];
 }
 
-export default function StarTalent({ onSelectSpeaker }: StarTalentProps) {
+export default function StarTalent({ onSelectSpeaker, speakers = [] }: StarTalentProps) {
   return (
     <div className="pb-40 pt-8 px-6 space-y-12 max-w-4xl mx-auto">
       <header className="space-y-2">
@@ -23,7 +23,7 @@ export default function StarTalent({ onSelectSpeaker }: StarTalentProps) {
       </header>
 
       <div className="grid gap-6">
-        {SPEAKERS.map((speaker) => (
+        {speakers.map((speaker) => (
           <button
             key={speaker.id}
             onClick={() => onSelectSpeaker(speaker)}

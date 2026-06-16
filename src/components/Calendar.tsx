@@ -5,7 +5,6 @@
 
 import { useState } from 'react';
 import { Video, MapPin, ExternalLink, Calendar as CalendarIcon, Clock, ChevronLeft, ChevronRight, User, Sparkles, X, PlayCircle } from 'lucide-react';
-import { MOCK_EVENTS } from '../constants';
 import { InspiraEvent, UserPlan } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { telemetryService } from '../services/dbService';
@@ -13,9 +12,10 @@ import { telemetryService } from '../services/dbService';
 interface CalendarProps {
   userPlan: UserPlan;
   onOpenPremium: () => void;
+  events?: InspiraEvent[];
 }
 
-export default function Calendar({ userPlan, onOpenPremium }: CalendarProps) {
+export default function Calendar({ userPlan, onOpenPremium, events = [] }: CalendarProps) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [viewingEvent, setViewingEvent] = useState<InspiraEvent | null>(null);
   const [showFomoModal, setShowFomoModal] = useState(false);
@@ -46,8 +46,14 @@ export default function Calendar({ userPlan, onOpenPremium }: CalendarProps) {
   ];
 
   const getEventsForDay = (day: number) => {
-    const dateStr = `${selectedDate.getFullYear()}-${(selectedDate.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
-    return MOCK_EVENTS.filter(e => e.date.startsWith(dateStr));
+    return events.filter((e) => {
+      const eventDate = new Date(e.date);
+      return (
+        eventDate.getFullYear() === selectedDate.getFullYear() &&
+        eventDate.getMonth() === selectedDate.getMonth() &&
+        eventDate.getDate() === day
+      );
+    });
   };
 
   return (

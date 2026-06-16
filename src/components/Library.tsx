@@ -8,7 +8,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import DiamondListIcon from './DiamondListIcon';
 import { Playlist, Audio, UserPlan, User, Book } from '../types';
-import { MOCK_AUDIOS, RECOMMENDED_BOOKS, getAudio, getBook } from '../constants';
+import { RECOMMENDED_BOOKS } from '../constants';
 import MarqueeTitle from './MarqueeTitle';
 import { useGlobalPlaylists } from '../hooks/useGlobalPlaylists';
 
@@ -28,7 +28,7 @@ interface LibraryProps {
 }
 
 export default function Library({ 
-  audios = MOCK_AUDIOS, user, userPlan, onSelectAudio, completedAudios, onOpenPremium, onDeletePlaylist, onRemoveFromPlaylist, onRenamePlaylist, onCreatePlaylist, onAddToPlaylist, initialSelectedPlaylistId
+  audios = [], user, userPlan, onSelectAudio, completedAudios, onOpenPremium, onDeletePlaylist, onRemoveFromPlaylist, onRenamePlaylist, onCreatePlaylist, onAddToPlaylist, initialSelectedPlaylistId
 }: LibraryProps) {
   const [selectedPlaylistId, setSelectedPlaylistId] = useState<string | null>(initialSelectedPlaylistId || null);
   const [isRenaming, setIsRenaming] = useState<string | null>(null);
@@ -162,9 +162,6 @@ export default function Library({
       onOpenPremium();
     }
   };
-
-  const getAudio = (id: string) => audios.find(a => a.id === id);
-  const getBook = (id: string) => RECOMMENDED_BOOKS.find(b => b.id === id);
 
   return (
     <div className="pb-40 pt-8 px-6 space-y-8 max-w-4xl mx-auto">

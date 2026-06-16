@@ -7,7 +7,6 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Play, Clock, Share2, MoreVertical, Plus, Gift, Trophy, CheckCircle2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Speaker, Audio, UserPlan, TalentNotification } from '../types';
-import { MOCK_AUDIOS } from '../constants';
 import MarqueeTitle from './MarqueeTitle';
 import { talentNotificationService } from '../services/dbService';
 import { auth } from '../services/firebase';
@@ -19,9 +18,10 @@ interface StarTalentWallProps {
   onAddToPlaylist?: (audio: Audio) => void;
   onSharePass?: (audio: Audio) => void;
   userPlan?: UserPlan;
+  audios?: Audio[];
 }
 
-export default function StarTalentWall({ speaker, onBack, onSelectAudio, onAddToPlaylist, onSharePass, userPlan }: StarTalentWallProps) {
+export default function StarTalentWall({ speaker, onBack, onSelectAudio, onAddToPlaylist, onSharePass, userPlan, audios = [] }: StarTalentWallProps) {
   const [notifications, setNotifications] = useState<TalentNotification[]>([]);
   const isOwnProfile = auth.currentUser?.displayName === speaker.name || auth.currentUser?.email?.includes(speaker.id);
 
@@ -32,7 +32,7 @@ export default function StarTalentWall({ speaker, onBack, onSelectAudio, onAddTo
     return () => unsub();
   }, [speaker.name]);
 
-  const speakerAudios = MOCK_AUDIOS.filter(a => a.author === speaker.name);
+  const speakerAudios = audios.filter(a => a.author === speaker.name || (a as any).talentId === speaker.id);
 
   const formatDuration = (seconds: number) => {
     const mins = Math.floor(seconds / 60);

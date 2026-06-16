@@ -6,7 +6,6 @@
 import { BookOpen, Star, MessageCircle, ChevronRight, PlayCircle, Plus, Search, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useState, useMemo } from 'react';
-import { RECOMMENDED_BOOKS } from '../constants';
 
 import { Audio, Book, EditorialSlot } from '../types';
 
@@ -20,7 +19,7 @@ interface BooksProps {
   books?: Book[];
 }
 
-export default function Books({ theme = 'elegant', onAddToPlaylist, onSelectAudio, userPlan = 'Gratis', onOpenPremium, editorialSlots = [], books = RECOMMENDED_BOOKS }: BooksProps) {
+export default function Books({ theme = 'elegant', onAddToPlaylist, onSelectAudio, userPlan = 'Gratis', onOpenPremium, editorialSlots = [], books = [] }: BooksProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const bookOfMonth = useMemo(() => {
     const now = new Date().toISOString();

@@ -30,6 +30,132 @@ const sanitizeData = (data: any) => {
   return clean;
 };
 
+
+const toNumber = (value: any, fallback = 0): number => {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+};
+
+const inferContentType = (raw: any): 'mentoring' | 'audiobook' => {
+  const explicit = String(raw?.contentType || raw?.content_type || '').toLowerCase();
+  if (['mentoring', 'mentoria', 'mentoría', 'mentor'].includes(explicit)) return 'mentoring';
+  if (['audiobook', 'audio_book', 'book', 'libro'].includes(explicit)) return 'audiobook';
+
+  const hints = [raw?.category, raw?.type, raw?.title, ...(raw?.tags || [])]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  if (hints.includes('mentor')) return 'mentoring';
+  return 'audiobook';
+};
+
+const normalizeAudioDoc = (id: string, data: any): Audio => {
+  const raw = data || {};
+  const contentType = inferContentType(raw);
+
+  return {
+    id,
+    title: raw.title || raw.titulo || 'Sin título',
+    author: raw.author || raw.autor || 'INSPIRA',
+    description: raw.description || raw.descripcion,
+    tags: Array.isArray(raw.tags) ? raw.tags : [],
+    duration: toNumber(raw.duration, 0),
+    coverUrl: raw.coverUrl || raw.cover_url || raw.portadaUrl || raw.imageUrl || '',
+    audioUrl: raw.audioUrl || raw.audio_url || raw.url || raw.fullAudioUrl || '',
+    audioFullUrl: raw.audioFullUrl || raw.audio_full_url || raw.fullUrl,
+    previewUrl: raw.previewUrl || raw.preview_url || raw.clipUrl || raw.demoUrl,
+    contentType,
+    isPremium: typeof raw.isPremium === 'boolean' ? raw.isPremium : (typeof raw.is_premium === 'boolean' ? raw.is_premium : contentType === 'mentoring'),
+    plays: toNumber(raw.plays, 0),
+    weeklyPlays: toNumber(raw.weeklyPlays, 0),
+    reproducciones: toNumber(raw.reproducciones, toNumber(raw.plays, 0)),
+    pendingPlays: toNumber(raw.pendingPlays, 0),
+    isPendingDigest: Boolean(raw.isPendingDigest),
+    uploadedAt: raw.uploadedAt || raw.createdAt || new Date().toISOString(),
+    category: raw.category || raw.categoria || (contentType === 'mentoring' ? 'Mentorías' : 'Audiolibros'),
+    rating: toNumber(raw.rating, 5),
+    nayaReasoned: Boolean(raw.nayaReasoned),
+    createdAt: raw.createdAt,
+  };
+};
+
+const normalizeSpeakerDoc = (id: string, data: any): Speaker => {
+  const raw = data || {};
+  return {
+    id,
+    name: raw.name || raw.nombre || 'Speaker',
+    bio: raw.bio || raw.descripcion || '',
+    photoUrl: raw.photoUrl || raw.photo_url || raw.fotoUrl || raw.avatarUrl || 'https://picsum.photos/seed/speaker/600/800',
+    role: raw.role || raw.rango || 'Speaker',
+    userEmail: raw.userEmail || raw.email,
+    totalPlays: toNumber(raw.totalPlays, 0),
+    pendingPlays: toNumber(raw.pendingPlays, 0),
+    createdAt: raw.createdAt,
+  };
+};
+
+const normalizeEventDoc = (id: string, data: any): InspiraEvent => {
+  const raw = data || {};
+  const statusRaw = String(raw.status || raw.estado || 'live').toLowerCase();
+  const status: 'live' | 'recorded' = ['recorded', 'replay', 'repeticion', 'repetición'].includes(statusRaw) ? 'recorded' : 'live';
+
+  return {
+    id,
+    title: raw.title || raw.titulo || 'Evento INSPIRA',
+    description: raw.description || raw.descripcion || '',
+    date: raw.date || raw.fecha || raw.startDate || new Date().toISOString(),
+    url: raw.url || raw.zoomUrl || raw.link || '',
+    status,
+    isPendingDigest: Boolean(raw.isPendingDigest),
+    createdAt: raw.createdAt,
+  };
+};
+
+const normalizeBookDoc = (id: string, data: any): Book => {
+  const raw = data || {};
+  const arrayStages = Array.isArray(raw.etapas)
+    ? raw.etapas
+    : Array.isArray(raw.stages)
+      ? raw.stages
+      : Array.isArray(raw.capitulos)
+        ? raw.capitulos
+        : [];
+
+  const etapasFromArray = arrayStages.map((etapa: any, idx: number) => ({
+    nombre: etapa?.nombre || etapa?.name || etapa?.titulo || `Etapa ${idx + 1}`,
+    url: etapa?.url || etapa?.audioUrl || etapa?.audio_url || etapa?.link || null,
+  }));
+
+  const fallbackStageUrls = [
+    raw.etapa1Url || raw.etapa_1_url || raw.stage1Url || raw.stage_1_url,
+    raw.etapa2Url || raw.etapa_2_url || raw.stage2Url || raw.stage_2_url,
+  ].filter(Boolean);
+
+  const etapas = etapasFromArray.length > 0
+    ? etapasFromArray
+    : fallbackStageUrls.map((url: string, idx: number) => ({ nombre: `Etapa ${idx + 1}`, url }));
+
+  return {
+    id,
+    title: raw.title || raw.titulo || 'Sin título',
+    author: raw.author || raw.autor || 'INSPIRA',
+    review: raw.review || raw.resena || raw.descripcion || '',
+    rating: toNumber(raw.rating, 5),
+    coverUrl: raw.coverUrl || raw.cover_url || raw.portadaUrl || raw.imageUrl || '',
+    type: raw.type || raw.tipo || 'Audiolibro',
+    category: raw.category || raw.categoria,
+    viewCount: toNumber(raw.viewCount, 0),
+    isPendingDigest: Boolean(raw.isPendingDigest),
+    createdAt: raw.createdAt,
+    etapas,
+  };
+};
+
 // User Services
 export const commissionService = {
   async getPayments(): Promise<Payment[]> {
@@ -96,7 +222,7 @@ export const audioService = {
     const path = 'audiobooks';
     try {
       const querySnapshot = await getDocs(collection(db, 'audiobooks'));
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Audio));
+      return querySnapshot.docs.map(doc => normalizeAudioDoc(doc.id, doc.data()));
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
       return [];
@@ -106,7 +232,7 @@ export const audioService = {
   subscribeToAudiobooks(callback: (audios: Audio[]) => void) {
     const path = 'audiobooks';
     return onSnapshot(collection(db, 'audiobooks'), (snapshot) => {
-      const audios = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Audio));
+      const audios = snapshot.docs.map(doc => normalizeAudioDoc(doc.id, doc.data()));
       callback(audios);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
@@ -188,7 +314,7 @@ export const speakerService = {
     const path = 'speakers';
     try {
       const querySnapshot = await getDocs(collection(db, 'speakers'));
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Speaker));
+      return querySnapshot.docs.map(doc => normalizeSpeakerDoc(doc.id, doc.data()));
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
       return [];
@@ -198,7 +324,7 @@ export const speakerService = {
   subscribeToSpeakers(callback: (speakers: Speaker[]) => void) {
     const path = 'speakers';
     return onSnapshot(collection(db, 'speakers'), (snapshot) => {
-      const speakers = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Speaker));
+      const speakers = snapshot.docs.map(doc => normalizeSpeakerDoc(doc.id, doc.data()));
       callback(speakers);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
@@ -245,7 +371,7 @@ export const eventService = {
     const path = 'events';
     try {
       const querySnapshot = await getDocs(collection(db, 'events'));
-      return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InspiraEvent));
+      return querySnapshot.docs.map(doc => normalizeEventDoc(doc.id, doc.data()));
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
       return [];
@@ -255,7 +381,7 @@ export const eventService = {
   subscribeToEvents(callback: (events: InspiraEvent[]) => void) {
     const path = 'events';
     return onSnapshot(collection(db, 'events'), (snapshot) => {
-      const events = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as InspiraEvent));
+      const events = snapshot.docs.map(doc => normalizeEventDoc(doc.id, doc.data()));
       callback(events);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);
@@ -381,7 +507,7 @@ export const bookService = {
     const path = 'books';
     try {
       const snapshot = await getDocs(collection(db, 'books'));
-      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Book));
+      return snapshot.docs.map(doc => normalizeBookDoc(doc.id, doc.data()));
     } catch (error) {
       handleFirestoreError(error, OperationType.LIST, path);
       return [];
@@ -391,7 +517,7 @@ export const bookService = {
   subscribeToBooks(callback: (books: Book[]) => void) {
     const path = 'books';
     return onSnapshot(collection(db, 'books'), (snapshot) => {
-      const books = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Book));
+      const books = snapshot.docs.map(doc => normalizeBookDoc(doc.id, doc.data()));
       callback(books);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, path);

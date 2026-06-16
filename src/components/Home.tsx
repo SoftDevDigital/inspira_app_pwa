@@ -6,7 +6,7 @@
 import { useState, useEffect, useMemo, memo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Crown, Play, BookOpen, ChevronRight, Search, Heart, X, Key, Trophy, Gift, Sparkles, Plus, ListMusic, Clock, Coffee, Menu, Check, Star, LayoutGrid, Radio, Award, TrendingUp, Share, FolderHeart, Lock as LockIcon, Video, ExternalLink, CalendarDays, Music } from 'lucide-react';
-import { MOCK_AUDIOS, WHATSAPP_PREMIUM_LINK, SPEAKERS, getWeeklyAudio, RECOMMENDED_BOOKS, BRANDING } from '../constants';
+import { WHATSAPP_PREMIUM_LINK, SPEAKERS, getWeeklyAudio, RECOMMENDED_BOOKS, BRANDING } from '../constants';
 import { Audio, UserPlan, User, Speaker, Book, InspiraEvent, AppConfig, EditorialSlot } from '../types';
 import { useGlobalPlaylists } from '../hooks/useGlobalPlaylists';
 import MarqueeTitle from './MarqueeTitle';
@@ -116,7 +116,7 @@ const MarqueeRow = memo(({ items, type, userPlan, onOpenPremium, onSelectAudio, 
 
 export default function Home({ 
   activeEvent, 
-  audios = MOCK_AUDIOS, 
+  audios = [], 
   books = [], 
   onSelectAudio, 
   userPlan, 
@@ -154,12 +154,17 @@ export default function Home({
       const scheduledAudio = audios.find(a => a.id === activeSlot.contentId);
       if (scheduledAudio) return scheduledAudio;
     }
+    if (audios.length === 0) return null;
     return getWeeklyAudio(audios);
   }, [audios, editorialSlots]);
 
   const isElegant = theme === 'elegant';
 
-  const mentorings = useMemo(() => audios.filter(a => a.contentType === 'mentoring'), [audios]);
+  const mentorings = useMemo(() => audios.filter(a => {
+    if (a.contentType === 'mentoring') return true;
+    const hints = [a.category, ...(a.tags || []), a.title].filter(Boolean).join(' ').toLowerCase();
+    return hints.includes('mentor');
+  }), [audios]);
 
   const identityLabel = user?.customAddress || (user?.gender === 'Mujer' ? 'Directora' : (user?.gender === 'Hombre' ? 'Director' : 'Líder'));
   
@@ -638,18 +643,18 @@ export default function Home({
             <div className={`flex flex-col gap-2.5 relative z-10 items-center mt-[15px] ${isElegant ? 'bg-black' : 'bg-transparent'}`}>
               {/* Card 1: Recommendation (Audio) */}
               <div 
-                onClick={() => onSelectAudio(weeklyAudio)}
+                onClick={() => weeklyAudio && onSelectAudio(weeklyAudio)}
                 className={`w-[90%] h-[44px] rounded-[10px] px-4 flex items-center gap-3 border backdrop-blur-lg relative overflow-hidden active:scale-95 transition-all cursor-pointer ${
                   isElegant 
                     ? 'bg-gradient-to-r from-[#000033] to-[#4B0082] border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.6)]' 
                     : 'bg-gradient-to-r from-blue-100 to-indigo-50 border-blue-200 shadow-sm'
-                } ${userPlan === 'Gratis' && weeklyAudio.isPremium ? 'opacity-70 grayscale-[0.5]' : ''}`}
+                } ${userPlan === 'Gratis' && weeklyAudio?.isPremium ? 'opacity-70 grayscale-[0.5]' : ''}`}
               >
                 <div className="shrink-0 relative">
                   <div className={`w-7 h-7 rounded-full overflow-hidden border shadow-md ${isElegant ? 'border-white/20' : 'border-blue-300'}`}>
-                    <img src={getSpeakerPhoto(weeklyAudio.author)} alt={weeklyAudio.author} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <img src={getSpeakerPhoto(weeklyAudio?.author || '')} alt={weeklyAudio?.author || 'Audio destacado'} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
-                  {userPlan === 'Gratis' && weeklyAudio.isPremium && (
+                  {userPlan === 'Gratis' && weeklyAudio?.isPremium && (
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-full">
                       <LockIcon size={10} className="text-accent" />
                     </div>
@@ -665,19 +670,19 @@ export default function Home({
                         style={{ willChange: "transform", transform: "translateZ(0)" }}
                       >
                         <span className={`text-[14px] font-medium tracking-[0.5px] uppercase italic ${isElegant ? 'text-white' : 'text-zinc-800'}`}>
-                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-blue-600'}>Audio:</span> {weeklyAudio.title}
+                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-blue-600'}>Audio:</span> {weeklyAudio?.title || 'Sin audio destacado'}
                         </span>
                         <span className={`text-[14px] font-medium tracking-[0.5px] uppercase italic ${isElegant ? 'text-white' : 'text-zinc-800'}`}>
-                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-blue-600'}>Audio:</span> {weeklyAudio.title}
+                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-blue-600'}>Audio:</span> {weeklyAudio?.title || 'Sin audio destacado'}
                         </span>
                       </motion.div>
                     </div>
-                    <span className={`text-[12px] font-medium tracking-[0.5px] uppercase italic leading-none ${isElegant ? 'text-white/60' : 'text-zinc-500'}`}>Directora {weeklyAudio.author}</span>
+                    <span className={`text-[12px] font-medium tracking-[0.5px] uppercase italic leading-none ${isElegant ? 'text-white/60' : 'text-zinc-500'}`}>Directora {weeklyAudio?.author || 'INSPIRA'}</span>
                   </div>
                 </div>
                 <div className="absolute right-3 flex items-center gap-2 z-20">
                   <button
-                    onClick={(e) => { e.stopPropagation(); handleShareAudio(weeklyAudio); }}
+                    onClick={(e) => { e.stopPropagation(); if (weeklyAudio) handleShareAudio(weeklyAudio); }}
                     className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 ${
                       isElegant ? 'bg-white/5 text-accent hover:bg-accent/10' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                     }`}
@@ -1067,7 +1072,7 @@ export default function Home({
       </div>
 
       <AnimatePresence>
-        {showWeeklyPopUp && (
+        {showWeeklyPopUp && weeklyAudio && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className={`fixed inset-0 z-[200] flex items-center justify-center px-6 backdrop-blur-md ${isElegant ? 'bg-black/80' : 'bg-white/60'}`}>
             <motion.div initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} className={`rounded-[48px] overflow-hidden max-w-md w-full border-2 ${
               isElegant 
@@ -1075,7 +1080,7 @@ export default function Home({
                 : 'bg-white border-zinc-100 shadow-2xl shadow-blue-500/10'
             }`}>
               <div className="relative aspect-[4/3] w-full overflow-hidden">
-                <img src={weeklyAudio.coverUrl} alt={weeklyAudio.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                <img src={weeklyAudio.coverUrl} alt={weeklyAudio?.title || 'Sin audio destacado'} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                 <div className={`absolute inset-0 bg-gradient-to-t via-transparent to-transparent ${isElegant ? 'from-bg-deep' : 'from-white'}`}></div>
                 <div className={`absolute top-8 left-8 backdrop-blur-md px-4 py-2 rounded-full border ${isElegant ? 'bg-black/40 border-white/10' : 'bg-white/60 border-zinc-200'}`}>
                    <div className="flex items-center gap-2">
@@ -1088,12 +1093,12 @@ export default function Home({
                 <div className="space-y-4">
                   <h3 className={`text-3xl font-black leading-tight italic tracking-tighter ${isElegant ? 'text-white' : 'text-zinc-900'}`}>Tu Enfoque para esta Semana 🎧</h3>
                   <div className="space-y-1">
-                    <p className={`text-sm font-bold uppercase tracking-widest italic ${isElegant ? 'text-text-dim' : 'text-zinc-400'}`}>{weeklyAudio.author}</p>
-                    <h4 className={`text-2xl font-black ${isElegant ? 'text-accent' : 'text-blue-600'}`}>{weeklyAudio.title}</h4>
+                    <p className={`text-sm font-bold uppercase tracking-widest italic ${isElegant ? 'text-text-dim' : 'text-zinc-400'}`}>{weeklyAudio?.author || 'INSPIRA'}</p>
+                    <h4 className={`text-2xl font-black ${isElegant ? 'text-accent' : 'text-blue-600'}`}>{weeklyAudio?.title || 'Sin audio destacado'}</h4>
                   </div>
                 </div>
                 <div className="space-y-4">
-                  <button onClick={() => { setShowWeeklyPopUp(false); onSelectAudio(weeklyAudio); }} className={`w-full py-6 rounded-3xl text-xl font-black hover:scale-105 active:scale-95 transition-all shadow-xl ${
+                  <button onClick={() => { setShowWeeklyPopUp(false); if (weeklyAudio) onSelectAudio(weeklyAudio); }} className={`w-full py-6 rounded-3xl text-xl font-black hover:scale-105 active:scale-95 transition-all shadow-xl ${
                     isElegant ? 'bg-accent text-black shadow-accent/20' : 'bg-blue-600 text-white shadow-blue-600/20'
                   }`}>Escuchar Ahora</button>
                   <button onClick={() => setShowWeeklyPopUp(false)} className={`text-[10px] font-black uppercase tracking-widest hover:brightness-125 transition-all ${isElegant ? 'text-text-dim hover:text-white' : 'text-zinc-400 hover:text-zinc-900'}`}>Cerrar aviso</button>

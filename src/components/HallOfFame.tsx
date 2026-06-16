@@ -6,7 +6,6 @@
 import { useState, useMemo } from 'react';
 import { Crown, Star, Award, TrendingUp, ChevronLeft, Play, BookOpen, Sparkles, Plus, Search } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { SPEAKERS } from '../constants';
 import { Speaker, Audio, Book, AppConfig } from '../types';
 
 interface HallOfFameProps {
@@ -25,7 +24,7 @@ export default function HallOfFame({
   onAddToPlaylist, 
   onSelectAudio, 
   onSelectBook,
-  speakers = SPEAKERS, 
+  speakers = [], 
   allAudios = [],
   allBooks = [],
   appConfig 
@@ -44,16 +43,14 @@ export default function HallOfFame({
   }, [selectedSpeaker, allAudios, allBooks]);
 
   const handlePlayMentor = (speaker: Speaker) => {
-    if (onSelectAudio) {
-      onSelectAudio({
-        id: `MENTOR-${speaker.id}`,
-        title: `Mentoría: ${speaker.name}`,
-        author: speaker.name,
-        coverUrl: speaker.photoUrl,
-        audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3', // Mock URL
-        category: 'Salón de la Fama',
-        duration: 2400
-      });
+    if (!onSelectAudio) return;
+
+    const mentorAudio = allAudios.find(
+      (a) => a.author === speaker.name || (a as any).talentId === speaker.id
+    );
+
+    if (mentorAudio) {
+      onSelectAudio(mentorAudio);
     }
   };
 
@@ -377,7 +374,7 @@ export default function HallOfFame({
             {filteredSpeakers.map((speaker, index) => (
               <motion.button
                 layout
-                key={speaker.name}
+                key={speaker.id}
                 onClick={() => setSelectedSpeaker(speaker)}
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}

@@ -5,7 +5,6 @@
 
 import React, { useState, useEffect, useMemo, useRef, ErrorInfo } from 'react';
 import { Audio, UserPlan, User, Book, Speaker, InspiraEvent, AppConfig, SuccessPath as SuccessPathType, Medal } from './types';
-import { MOCK_AUDIOS, SPEAKERS } from './constants';
 import BottomNav from './components/BottomNav';
 import Home from './components/Home';
 import Books from './components/Books';
@@ -463,22 +462,25 @@ export default function App() {
   const [localPlayCounts, setLocalPlayCounts] = useState<Record<string, number>>({});
 
   const allSpeakers = useMemo(() => {
-    return [...SPEAKERS, ...dynamicSpeakers].reduce((acc, current) => {
-      const x = acc.find(item => item.id === current.id || item.userEmail === current.userEmail);
-      if (!x) return acc.concat([current]);
+    return dynamicSpeakers.reduce((acc, current) => {
+      const exists = acc.find(item => item.id === current.id || item.userEmail === current.userEmail);
+      if (!exists) acc.push(current);
       return acc;
     }, [] as Speaker[]);
   }, [dynamicSpeakers]);
 
   const allAudios: Audio[] = useMemo(() => {
-    return [...MOCK_AUDIOS, ...dynamicAudios].reduce((acc, current) => {
-      const x = acc.find(item => item.id === current.id);
-      if (!x) acc.push(current);
-      return acc;
-    }, [] as Audio[]).map(audio => ({
-      ...audio,
-      reproducciones: (audio.reproducciones || 0) + (localPlayCounts[audio.id] || 0)
-    }));
+    return dynamicAudios
+      .filter((audio) => Boolean(audio.audioUrl))
+      .reduce((acc, current) => {
+        const exists = acc.find(item => item.id === current.id);
+        if (!exists) acc.push(current);
+        return acc;
+      }, [] as Audio[])
+      .map(audio => ({
+        ...audio,
+        reproducciones: (audio.reproducciones || 0) + (localPlayCounts[audio.id] || 0)
+      }));
   }, [dynamicAudios, localPlayCounts]);
 
   const activeEvent = events.find(e => e.status === 'live') || [...events].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
@@ -872,7 +874,7 @@ export default function App() {
     
     // Check if user is already premium
     if (userPlan === 'Premium') {
-      const audio = allAudios.find(a => a.id === audioId) || MOCK_AUDIOS.find(a => a.id === audioId);
+      const audio = allAudios.find(a => a.id === audioId);
       if (audio) {
         handleSelectAudio(audio);
       }
@@ -886,7 +888,7 @@ export default function App() {
     if (redeemedCount >= 1) {
       setIsGiftLimitModalOpen(true);
     } else {
-      const audio = allAudios.find(a => a.id === audioId) || MOCK_AUDIOS.find(a => a.id === audioId);
+      const audio = allAudios.find(a => a.id === audioId);
       if (audio) {
         setActivePassAudioId(audioId);
         handleSelectAudio(audio);
@@ -1125,15 +1127,9 @@ export default function App() {
         isAdmin = true;
       }
       
-      // Check if user is a Start Talent VIP
-      const isTalent = allSpeakers.some(s => s.userEmail === email);
-      let plan = user.plan;
-      let isStartTalentVIP = user.isStartTalentVIP;
-
-      if (isTalent) {
-        plan = 'Premium';
-        isStartTalentVIP = true;
-      }
+      // El plan se conserva desde Firestore (nuevos usuarios deben iniciar en Gratis).
+      const plan = user.plan || 'Gratis';
+      const isStartTalentVIP = user.isStartTalentVIP;
 
       // Admins bypass onboarding by having a default rank and gender
       const current_rank = (isAdmin && !user.current_rank) ? 'Directora Nacional' : user.current_rank;
@@ -1331,7 +1327,7 @@ export default function App() {
             onSelectAudio={handleSelectAudio} 
             onOpenPremium={() => handleOpenPremium('fomo')} 
             editorialSlots={editorialSlots}
-            books={dynamicBooks.length > 0 ? dynamicBooks : undefined}
+            books={dynamicBooks}
           />
         );
       case 'book-detail':
@@ -1354,6 +1350,7 @@ export default function App() {
           <Calendar 
             userPlan={providedPlan} 
             onOpenPremium={() => handleOpenPremium()} 
+            events={events}
           />
         );
       case 'chat':
@@ -1551,7 +1548,7 @@ export default function App() {
             inició sesión y no está en onboarding/splash. El propio componente
             decide si aparece (beforeinstallprompt disponible, no instalada,
             no pospuesta en los últimos 7 días). */}
-        {!isSplashVisible && isAuthenticated && !needsOnboarding && <InstallPWA />}
+        {!isSplashVisible && isAuthenticated && <InstallPWA />}
 
         {/* MURO DE CARGA DESACTIVADO POR SEGURIDAD */}
         {false && !isSplashVisible && isAuthenticated && !user && (
