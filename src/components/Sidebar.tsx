@@ -68,36 +68,13 @@ export default function Sidebar({
     }
   };
 
-  // Instala la PWA con confirmación previa, instrucciones o feedback al finalizar.
+  // Instala la PWA con confirmación previa y feedback al finalizar o indicar incompatibilidad.
   const handleInstallApp = async () => {
     if (isInstalled) {
       window.alert(
         '¡Ya tienes INSPIRA instalada en tu dispositivo! 🎉\n\n' +
         'Puedes abrirla directamente desde tu pantalla de inicio.'
       );
-      onClose();
-      return;
-    }
-
-    if (!canInstall) {
-      // Determinamos si es iOS
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-      if (isIOS) {
-        window.alert(
-          'Para descargar/instalar INSPIRA en tu iPhone/iPad:\n\n' +
-          '1. Abre la app en Safari.\n' +
-          '2. Toca el botón de "Compartir" (el ícono de la caja con la flecha hacia arriba en la barra inferior).\n' +
-          '3. Desliza hacia abajo y selecciona "Agregar a inicio" (o "Add to Home Screen").\n\n' +
-          '¡Y listo! Tendrás el ícono de INSPIRA en tu pantalla de inicio como una aplicación nativa.'
-        );
-      } else {
-        window.alert(
-          'Para descargar/instalar INSPIRA en tu dispositivo:\n\n' +
-          '1. Abre el menú de opciones de tu navegador (los tres puntos en la esquina superior derecha o en la barra de direcciones).\n' +
-          '2. Selecciona "Instalar aplicación", "Agregar a la pantalla principal" o "Instalar Inspira".\n\n' +
-          '¡Listo! Podrás acceder a tu biblioteca al instante.'
-        );
-      }
       onClose();
       return;
     }
@@ -111,6 +88,12 @@ export default function Sidebar({
     const outcome = await install();
     if (outcome === 'accepted') {
       window.alert('¡App instalada exitosamente! 🎉\n\nBúscala en tu pantalla de inicio.');
+    } else if (outcome === null) {
+      console.warn('[PWA] La instalación automática no está disponible en este navegador/dispositivo.');
+      window.alert(
+        'La instalación automática no es compatible con tu navegador o dispositivo actual.\n\n' +
+        'Para descargarla, por favor usa la opción "Agregar a la pantalla principal" o "Instalar" desde el menú de tu navegador.'
+      );
     }
     onClose();
   };
