@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { User, UserPlan, AppConfig } from '../types';
-import { X, LogOut, Sun, Moon, User as UserIcon, Settings, Headphones, MessageSquare as MessageSquareIcon, ChevronDown, ChevronUp, Bell, Sparkles, Share2, DownloadCloud } from 'lucide-react';
+import { X, LogOut, Sun, Moon, User as UserIcon, Settings, Headphones, MessageSquare as MessageSquareIcon, ChevronDown, ChevronUp, Bell, Sparkles, Share2, DownloadCloud, Check } from 'lucide-react';
 import { BRANDING } from '../constants';
 import { useInstallPWA } from './InstallPWA';
 
@@ -68,10 +68,42 @@ export default function Sidebar({
     }
   };
 
-  // Instala la PWA con confirmación previa y feedback al finalizar.
+  // Instala la PWA con confirmación previa, instrucciones o feedback al finalizar.
   const handleInstallApp = async () => {
+    if (isInstalled) {
+      window.alert(
+        '¡Ya tienes INSPIRA instalada en tu dispositivo! 🎉\n\n' +
+        'Puedes abrirla directamente desde tu pantalla de inicio.'
+      );
+      onClose();
+      return;
+    }
+
+    if (!canInstall) {
+      // Determinamos si es iOS
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+      if (isIOS) {
+        window.alert(
+          'Para descargar/instalar INSPIRA en tu iPhone/iPad:\n\n' +
+          '1. Abre la app en Safari.\n' +
+          '2. Toca el botón de "Compartir" (el ícono de la caja con la flecha hacia arriba en la barra inferior).\n' +
+          '3. Desliza hacia abajo y selecciona "Agregar a inicio" (o "Add to Home Screen").\n\n' +
+          '¡Y listo! Tendrás el ícono de INSPIRA en tu pantalla de inicio como una aplicación nativa.'
+        );
+      } else {
+        window.alert(
+          'Para descargar/instalar INSPIRA en tu dispositivo:\n\n' +
+          '1. Abre el menú de opciones de tu navegador (los tres puntos en la esquina superior derecha o en la barra de direcciones).\n' +
+          '2. Selecciona "Instalar aplicación", "Agregar a la pantalla principal" o "Instalar Inspira".\n\n' +
+          '¡Listo! Podrás acceder a tu biblioteca al instante.'
+        );
+      }
+      onClose();
+      return;
+    }
+
     const confirmed = window.confirm(
-      '¿Deseas instalar Inspira en tu dispositivo?\n\n' +
+      '¿Deseas descargar e instalar Inspira en tu dispositivo?\n\n' +
       'Tendrás acceso rápido desde tu pantalla de inicio y podrás usar la app sin conexión.'
     );
     if (!confirmed) return;
@@ -80,7 +112,6 @@ export default function Sidebar({
     if (outcome === 'accepted') {
       window.alert('¡App instalada exitosamente! 🎉\n\nBúscala en tu pantalla de inicio.');
     }
-    // Si el usuario cancela el cuadro nativo (dismissed) no mostramos nada.
     onClose();
   };
 
@@ -191,21 +222,33 @@ export default function Sidebar({
                 </div>
               </button>
 
-              {/* Botón Instalar App (PWA) — solo si se puede instalar y no está ya instalada.
-                  Funciona en escritorio y móvil (Chrome/Edge) cuando hay prompt disponible. */}
-              {canInstall && !isInstalled && (
-                <button
-                  onClick={handleInstallApp}
-                  className={`${menuButtonStyle} border-accent/50 bg-accent/10 shadow-[0_0_20px_rgba(255,140,0,0.2)]`}
-                  id="install-pwa-btn"
-                >
-                  <div className={iconTextStyle}>
-                    <DownloadCloud size={18} className="text-accent" />
-                    <span className={`${labelStyle} text-accent`}>Instalar App</span>
-                  </div>
-                  <Sparkles size={14} className="text-accent shrink-0" />
-                </button>
-              )}
+              {/* Botón Descargar App (PWA) — visible siempre.
+                  Funciona en escritorio y móvil. Si no hay prompt nativo o ya está instalada, 
+                  provee instrucciones o confirmación en handleInstallApp. */}
+              <button
+                onClick={handleInstallApp}
+                className={`${menuButtonStyle} ${
+                  isInstalled 
+                    ? 'border-green-500/30 bg-green-500/5' 
+                    : 'border-accent/50 bg-accent/10 shadow-[0_0_20px_rgba(255,140,0,0.2)]'
+                }`}
+                id="install-pwa-btn"
+              >
+                <div className={iconTextStyle}>
+                  {isInstalled ? (
+                    <>
+                      <Check size={18} className="text-green-500" />
+                      <span className={`${labelStyle} text-green-500`}>App Instalada</span>
+                    </>
+                  ) : (
+                    <>
+                      <DownloadCloud size={18} className="text-accent" />
+                      <span className={`${labelStyle} text-accent`}>Descargar App</span>
+                    </>
+                  )}
+                </div>
+                {!isInstalled && <Sparkles size={14} className="text-accent shrink-0" />}
+              </button>
 
               {/* Accordion Settings */}
               <div className="space-y-2">
