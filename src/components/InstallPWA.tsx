@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Download, X, Sparkles } from 'lucide-react';
+import IOSInstallModal from './IOSInstallModal';
 
 /**
  * Evento beforeinstallprompt (no está tipado en lib.dom estándar).
@@ -49,6 +50,17 @@ const isAppInstalled = (): boolean => {
 };
 
 /**
+ * Determina si el dispositivo es iOS (iPhone, iPad, iPod).
+ */
+const isIOS = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const userAgent = window.navigator.userAgent.toLowerCase();
+  const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
+  const isMacWithTouch = window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1;
+  return isIosDevice || isMacWithTouch;
+};
+
+/**
  * Indica si el usuario pospuso el banner hace menos de DISMISS_DAYS días.
  */
 const wasRecentlyDismissed = (): boolean => {
@@ -80,6 +92,7 @@ export const useInstallPWA = () => {
 
   useEffect(() => {
     let showTimer: ReturnType<typeof setTimeout>;
+    const iosMode = isIOS();
 
     // Nos suscribimos a los cambios del prompt cacheado a nivel de módulo.
     const onPromptChange = (e: BeforeInstallPromptEvent | null) => {
@@ -90,8 +103,10 @@ export const useInstallPWA = () => {
           showTimer = setTimeout(() => setIsVisible(true), SHOW_DELAY_MS);
         }
       } else {
-        // Ya no hay prompt disponible: ocultamos el banner.
-        setIsVisible(false);
+        // En Android, si no hay prompt disponible ocultamos el banner. En iOS seguimos mostrando.
+        if (!iosMode) {
+          setIsVisible(false);
+        }
       }
     };
 
@@ -104,6 +119,11 @@ export const useInstallPWA = () => {
 
     promptListeners.add(onPromptChange);
     window.addEventListener('appinstalled', onAppInstalled);
+
+    // Si es iOS, iniciamos el timer directamente ya que no hay beforeinstallprompt
+    if (iosMode && !isAppInstalled() && !wasRecentlyDismissed()) {
+      showTimer = setTimeout(() => setIsVisible(true), SHOW_DELAY_MS);
+    }
 
     // Si ya teníamos un prompt cacheado al montar, evaluamos mostrar el banner.
     if (cachedPrompt && !isAppInstalled() && !wasRecentlyDismissed()) {
@@ -161,8 +181,8 @@ export const useInstallPWA = () => {
   }, []);
 
   return {
-    canInstall: Boolean(deferredPrompt) && !isInstalled,
-    isVisible: isVisible && Boolean(deferredPrompt) && !isInstalled,
+    canInstall: (Boolean(deferredPrompt) || isIOS()) && !isInstalled,
+    isVisible: isVisible && (Boolean(deferredPrompt) || isIOS()) && !isInstalled,
     isInstalled,
     install,
     dismiss,
@@ -175,8 +195,19 @@ export const useInstallPWA = () => {
  */
 const InstallPWA: React.FC = () => {
   const { isVisible, install, dismiss } = useInstallPWA();
+  const [isIOSModalOpen, setIsIOSModalOpen] = useState(false);
+
+  const handleInstallClick = async () => {
+    if (isIOS()) {
+      setIsIOSModalOpen(true);
+      dismiss();
+      return;
+    }
+    await install();
+  };
 
   return (
+    <>
     <AnimatePresence>
       {isVisible && (
         <motion.div
@@ -234,7 +265,7 @@ const InstallPWA: React.FC = () => {
               {/* Botones de acción */}
               <div className="flex items-center gap-3 px-5 pb-5 sm:px-6 sm:pb-6">
                 <button
-                  onClick={install}
+                  onClick={handleInstallClick}
                   className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-accent py-3.5 text-[13px] font-black uppercase tracking-widest text-black transition hover:brightness-110 active:scale-[0.98]"
                 >
                   <Download size={16} />
@@ -252,6 +283,8 @@ const InstallPWA: React.FC = () => {
         </motion.div>
       )}
     </AnimatePresence>
+    <IOSInstallModal isOpen={isIOSModalOpen} onClose={() => setIsIOSModalOpen(false)} />
+    </>
   );
 };
 

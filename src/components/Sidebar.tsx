@@ -4,6 +4,7 @@ import { User, UserPlan, AppConfig } from '../types';
 import { X, LogOut, Sun, Moon, User as UserIcon, Settings, Headphones, MessageSquare as MessageSquareIcon, ChevronDown, ChevronUp, Bell, Sparkles, Share2, DownloadCloud, Check } from 'lucide-react';
 import { BRANDING } from '../constants';
 import { useInstallPWA } from './InstallPWA';
+import IOSInstallModal from './IOSInstallModal';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -31,6 +32,7 @@ export default function Sidebar({
   onToggleSimulation 
 }: SidebarProps) {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isIOSModalOpen, setIsIOSModalOpen] = useState(false);
   // Lógica de instalación PWA (compartida con el banner InstallPWA).
   const { canInstall, isInstalled, install } = useInstallPWA();
   const isSuperAdmin = user?.email === 'operaciones@inspiraapps.com';
@@ -79,6 +81,17 @@ export default function Sidebar({
       return;
     }
 
+    // Detección de iOS para guiar manualmente
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const isIos = /iphone|ipad|ipod/.test(userAgent) || 
+      (window.navigator.platform === 'MacIntel' && window.navigator.maxTouchPoints > 1);
+
+    if (isIos) {
+      setIsIOSModalOpen(true);
+      onClose(); // Cierra el sidebar para despejar la vista y dejar libre la barra de navegación de Safari
+      return;
+    }
+
     const confirmed = window.confirm(
       '¿Deseas descargar e instalar Inspira en tu dispositivo?\n\n' +
       'Tendrás acceso rápido desde tu pantalla de inicio y podrás usar la app sin conexión.'
@@ -109,8 +122,9 @@ export default function Sidebar({
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
+    <>
+      <AnimatePresence>
+        {isOpen && (
         <>
           {/* Overlay */}
           <motion.div
@@ -366,5 +380,7 @@ export default function Sidebar({
         </>
       )}
     </AnimatePresence>
+    <IOSInstallModal isOpen={isIOSModalOpen} onClose={() => setIsIOSModalOpen(false)} />
+    </>
   );
 }
