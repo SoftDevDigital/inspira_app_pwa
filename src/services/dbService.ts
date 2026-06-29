@@ -30,6 +30,35 @@ const sanitizeData = (data: any) => {
   return clean;
 };
 
+const buildAudioWritePayload = (audio: Partial<Audio>) => {
+  const payload: any = { ...audio };
+
+  // Compatibilidad bidireccional con snake_case y camelCase en Firebase.
+  const audioUrl = payload.audioUrl || payload.audio_url;
+  const coverUrl = payload.coverUrl || payload.cover_url;
+  const previewUrl = payload.previewUrl || payload.preview_url;
+  const contentType = payload.contentType || payload.content_type;
+
+  if (audioUrl) {
+    payload.audioUrl = audioUrl;
+    payload.audio_url = audioUrl;
+  }
+  if (coverUrl) {
+    payload.coverUrl = coverUrl;
+    payload.cover_url = coverUrl;
+  }
+  if (previewUrl) {
+    payload.previewUrl = previewUrl;
+    payload.preview_url = previewUrl;
+  }
+  if (contentType) {
+    payload.contentType = contentType;
+    payload.content_type = contentType;
+  }
+
+  return payload;
+};
+
 
 const toNumber = (value: any, fallback = 0): number => {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -242,10 +271,10 @@ export const audioService = {
   async createAudiobook(audio: Omit<Audio, 'id'>): Promise<string> {
     const path = 'audiobooks';
     try {
-      const cleanAudio = sanitizeData({
+      const cleanAudio = sanitizeData(buildAudioWritePayload({
         ...audio,
         isPendingDigest: true
-      });
+      }));
       const newDocRef = doc(collection(db, 'audiobooks'));
       await setDoc(newDocRef, { ...cleanAudio, id: newDocRef.id });
       return newDocRef.id;
@@ -258,7 +287,7 @@ export const audioService = {
   async updateAudio(audioId: string, updates: Partial<Audio>) {
     const path = `audiobooks/${audioId}`;
     try {
-      const cleanUpdates = sanitizeData(updates);
+      const cleanUpdates = sanitizeData(buildAudioWritePayload(updates));
       const docRef = doc(db, 'audiobooks', audioId);
       await updateDoc(docRef, cleanUpdates);
     } catch (error) {
