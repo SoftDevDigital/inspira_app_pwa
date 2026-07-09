@@ -136,5 +136,29 @@ service cloud.firestore {
       allow read: if isSignedIn();
       allow write: if isAdmin();
     }
+
+    // 11. Usage Events Collection (telemetría)
+    // Los usuarios autenticados pueden registrar eventos de uso.
+    // Solo el admin puede leer/listar los eventos.
+    match /usage_events/{eventId} {
+      allow read, list: if isAdmin();
+      allow create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+
+    // 12. Payments Collection (pagos de comisiones internas)
+    // Solo el admin puede leer y escribir.
+    match /payments/{paymentId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 13. Talent Notifications Collection
+    // El admin puede leer/escribir todas.
+    // Los usuarios autenticados pueden leer las notificaciones dirigidas a ellos.
+    match /talent_notifications/{notificationId} {
+      allow read: if isAdmin() || (isSignedIn() && existing().talentId == request.auth.uid);
+      allow list: if isAdmin();
+      allow write: if isAdmin();
+    }
   }
 }

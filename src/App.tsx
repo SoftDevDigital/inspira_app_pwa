@@ -35,6 +35,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { auth } from './services/firebase';
 import { userService, speakerService, audioService, eventService, configService, telemetryService, editorialService, bookService, playlistService, successPathService } from './services/dbService';
 import { useUserPlaylists } from './hooks/useUserPlaylists';
+import { savePlayerState, loadPlayerState, clearPlayerState } from './services/playerPersistence';
 import { useGamification } from './hooks/useGamification';
 import { AnimatePresence, motion } from 'motion/react';
 import { X, ListMusic, AlertCircle, Sparkles, Bell, CheckCircle2, Shield } from 'lucide-react';
@@ -515,6 +516,10 @@ export default function App() {
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  // Persistencia del reproductor (IndexedDB): posición a restaurar y throttle de guardado.
+  const restorePositionRef = useRef<number | null>(null);
+  const hasRestoredRef = useRef(false);
+  const lastSaveRef = useRef(0);
 
   // Initialize queue once audios are loaded
   useEffect(() => {
@@ -522,6 +527,36 @@ export default function App() {
       setQueue(allAudios.slice(0, 10));
     }
   }, [allAudios, queue.length]);
+
+  // ---------------------------------------------------------------------------
+  // PERSISTENCIA DEL REPRODUCTOR (B1)
+  // Al abrir la app, restauramos el contenido y la posición exacta donde el
+  // usuario se quedó (guardados en IndexedDB). Se restaura en PAUSA y en modo
+  // mini-reproductor, para no interrumpir; el usuario retoma con un toque.
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!isAuthenticated || allAudios.length === 0 || hasRestoredRef.current) return;
+    hasRestoredRef.current = true;
+    (async () => {
+      const saved = await loadPlayerState();
+      if (!saved) return;
+      const audio = allAudios.find(a => a.id === saved.contentId);
+      if (!audio) return;
+
+      // Reconstruimos la fila por categoría (sin mezclar géneros) sin autoplay.
+      const currentType = audio.contentType || 'audiobook';
+      const sameType = allAudios.filter(a => (a.contentType || 'audiobook') === currentType);
+      const related = sameType.filter(a => a.category === audio.category || a.author === audio.author);
+      const rest = sameType.filter(a => !related.some(r => r.id === a.id));
+      const ordered = [...related, ...rest].filter(a => a.id !== audio.id);
+      setQueue([audio, ...ordered]);
+
+      restorePositionRef.current = saved.position || 0;
+      setCurrentAudio(audio);
+      setIsPlaying(false);          // reanudar manualmente
+      setIsPlayerExpanded(false);   // mostrar mini-reproductor
+    })();
+  }, [isAuthenticated, allAudios.length]);
 
   // Selector de audio mejorado para auto-play inmediato
   const handleSelectAudio = (audio: Audio | null) => {
@@ -540,11 +575,16 @@ export default function App() {
     // Auto-expand player for everyone
     setIsPlayerExpanded(true);
 
-    // Actualización dinámica de la Fila
-    const newQueue = allAudios.filter(a => a.category === audio.category || a.author === audio.author).slice(0, 10);
-    if (!newQueue.some(q => q.id === audio.id)) {
-      newQueue.unshift(audio);
-    }
+    // Actualización dinámica de la Fila (Autoplay por categoría, estilo Spotify).
+    // REGLA: no mezclar géneros. Si escuchas mentorías, la fila sigue con
+    // mentorías; si escuchas audiolibros, sigue con audiolibros.
+    const currentType = audio.contentType || 'audiobook';
+    const sameType = allAudios.filter(a => (a.contentType || 'audiobook') === currentType);
+    // Priorizamos misma categoría/autor y luego el resto de la misma categoría de contenido.
+    const related = sameType.filter(a => a.category === audio.category || a.author === audio.author);
+    const rest = sameType.filter(a => !related.some(r => r.id === a.id));
+    const ordered = [...related, ...rest].filter(a => a.id !== audio.id);
+    const newQueue = [audio, ...ordered];
     setQueue(newQueue);
     
     // Log telemetry
@@ -690,13 +730,64 @@ export default function App() {
         setIsPlaying(false);
         audioRef.current.pause();
       }
+
+      // Persistencia: guardamos la posición cada ~5s mientras se reproduce.
+      if (currentAudio && newTime > 0) {
+        const now = Date.now();
+        if (now - lastSaveRef.current > 5000) {
+          lastSaveRef.current = now;
+          persistPlayer(newTime, true);
+        }
+      }
     }
   };
+
+  // Guarda el estado actual del reproductor (contenido + posición) en IndexedDB.
+  const persistPlayer = (position?: number, playing?: boolean) => {
+    if (!currentAudio) return;
+    const pos = position ?? audioRef.current?.currentTime ?? currentTime;
+    savePlayerState({
+      contentId: currentAudio.id,
+      contentType: currentAudio.contentType || 'audiobook',
+      position: pos,
+      duration: audioRef.current?.duration || duration || 0,
+      title: currentAudio.title,
+      isPlaying: playing ?? isPlaying,
+      timestamp: Date.now(),
+    }).catch(() => {});
+  };
+
+  // Guardar al minimizar/cerrar la app (background) o al ocultar la pestaña.
+  useEffect(() => {
+    const saveNow = () => {
+      if (currentAudio && audioRef.current) {
+        persistPlayer(audioRef.current.currentTime, isPlaying);
+      }
+    };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') saveNow(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', saveNow);
+    window.addEventListener('beforeunload', saveNow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', saveNow);
+      window.removeEventListener('beforeunload', saveNow);
+    };
+  }, [currentAudio?.id, isPlaying, currentTime, duration]);
 
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
       setIsLoading(false);
+      // Restaurar posición guardada (persistencia del reproductor).
+      if (restorePositionRef.current != null) {
+        const pos = restorePositionRef.current;
+        restorePositionRef.current = null;
+        if (pos > 0 && pos < audioRef.current.duration - 1) {
+          audioRef.current.currentTime = pos;
+          setCurrentTime(pos);
+        }
+      }
     }
   };
 
@@ -706,16 +797,34 @@ export default function App() {
   };
 
   const handleAudioEnded = () => {
-    setIsPlaying(false);
     const isCourtesyPass = activePassAudioId === currentAudio?.id;
+
+    // Usuarios GRATIS (sin pase de cortesía): mostrar modal Premium al terminar.
     if (providedPlan === 'Gratis' && currentAudio && !isCourtesyPass) {
+      setIsPlaying(false);
       setPremiumModalInfo({
         title: "¿Quieres escuchar más?",
         description: "Pásate a Premium para desbloquear la mentoría completa y cientos de audios exclusivos más.",
         buttonText: "Ser Premium Ahora"
       });
       setIsPremiumModalOpen(true);
+      return;
     }
+
+    // Reproducción continua (B2): solo para Premium, ya que el siguiente
+    // contenido de la cola no está desbloqueado para usuarios Gratis.
+    // La cola ya está filtrada por categoría (no se mezclan géneros).
+    if (providedPlan === 'Premium' && currentAudio && queue.length > 1) {
+      const currentIndex = queue.findIndex(a => a.id === currentAudio.id);
+      // Si hay un siguiente elemento en la cola, lo reproducimos automáticamente.
+      if (currentIndex !== -1 && currentIndex < queue.length - 1) {
+        handleSelectAudio(queue[currentIndex + 1]);
+        return;
+      }
+    }
+
+    // Fin de la cola (o usuario Gratis con pase de cortesía): detener reproducción.
+    setIsPlaying(false);
   };
 
   const handleGiveGift = (audio: Audio | null) => {
@@ -1229,6 +1338,10 @@ export default function App() {
       // signOut(auth) ya elimina el token de Firebase; no usamos
       // localStorage.clear() para no tocar otras claves de Firebase.
       clearAppLocalStorage();
+      // Borramos el estado persistido del reproductor (IndexedDB + fallback).
+      clearPlayerState().catch(() => {});
+      setCurrentAudio(null);
+      setIsPlaying(false);
       setUser(null);
       setIsAuthenticated(false);
       setUserPlan('Gratis');

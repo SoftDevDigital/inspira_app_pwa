@@ -59,7 +59,9 @@ export default function AudioPlayer({
   const [showPlaylistMenu, setShowPlaylistMenu] = useState(false);
   const { playlists: globalPlaylists, addPlaylist, toggleItemInPlaylist, getPlaylistItems } = useGlobalPlaylists();
   const [addedToListIds, setAddedToListIds] = useState<string[]>([]);
-  const [regalos, setRegalos] = useState(20);
+  // Los regalos se gestionan en el backend (Firestore) a través del prop onGiveGift.
+  // Calculamos los regalos restantes a partir de userPassesUsed (límite diario: 20).
+  const regalosRestantes = Math.max(0, 20 - userPassesUsed);
   const [isCreating, setIsCreating] = useState(false);
   const [newPlaylistName, setNewPlaylistName] = useState('');
   const [showGiftMessage, setShowGiftMessage] = useState(false);
@@ -76,30 +78,14 @@ export default function AudioPlayer({
     setAddedToListIds(listIds);
   }, [globalPlaylists, audio, showPlaylistMenu]);
 
-  const handleShareGift = async () => {
-    if (regalos <= 0) {
-      alert("No te quedan regalos disponibles");
+  const handleShareGift = () => {
+    if (regalosRestantes <= 0) {
+      alert("No te quedan regalos disponibles por hoy");
       return;
     }
-
-    const shareData = {
-      title: 'Escucha esto en INSPIRA',
-      text: `Te regalo un acceso a este contenido exclusivo: ${audio?.title}`,
-      url: window.location.href // Fallback to current URL if no specific one
-    };
-
-    try {
-      if (navigator.share) {
-        await navigator.share(shareData);
-        setRegalos(prev => prev - 1);
-      } else {
-        await navigator.clipboard.writeText(`${shareData.text} \n ${shareData.url}`);
-        alert("Enlace copiado al portapapeles. ¡Compártelo!");
-        setRegalos(prev => prev - 1);
-      }
-    } catch (err) {
-      console.log('Error al compartir:', err);
-    }
+    // Delegamos toda la lógica de compartir + descuento en el backend (Firestore)
+    // al componente padre, que persiste el contador diario de regalos.
+    onGiveGift();
   };
 
   const handleCreatePlaylist = async () => {
@@ -176,16 +162,16 @@ export default function AudioPlayer({
         <div className="absolute top-8 right-8 flex items-center gap-4">
           <button
             onClick={handleShareGift}
-            disabled={regalos <= 0}
+            disabled={regalosRestantes <= 0}
             className={`transition-all p-3 z-30 flex flex-col items-center gap-1 ${
-              regalos <= 0
+              regalosRestantes <= 0
                 ? 'opacity-30 grayscale cursor-not-allowed'
                 : (isElegant ? 'text-accent hover:scale-110' : 'text-blue-600 hover:scale-110')
             }`}
-            title={regalos <= 0 ? "No te quedan regalos disponibles" : `Regalar Pase (${regalos} disponibles)`}
+            title={regalosRestantes <= 0 ? "No te quedan regalos disponibles por hoy" : `Regalar Pase (${regalosRestantes} disponibles)`}
           >
             <Gift size={32} />
-            <span className="text-[8px] font-black uppercase tracking-widest">{regalos <= 0 ? 'Agotados' : `${regalos} Regalos`}</span>
+            <span className="text-[8px] font-black uppercase tracking-widest">{regalosRestantes <= 0 ? 'Agotados' : `${regalosRestantes} Regalos`}</span>
           </button>
         </div>
 

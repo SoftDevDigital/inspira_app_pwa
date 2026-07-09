@@ -192,6 +192,23 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
   const [editingTalentId, setEditingTalentId] = useState<string | null>(null);
   const [isNayaLearning, setIsNayaLearning] = useState(false);
   const [nayaToast, setNayaToast] = useState<{ visible: boolean; title: string }>({ visible: false, title: '' });
+
+  // Modal de confirmación y sistema de notificaciones (toast) internos.
+  // Reemplazan window.confirm/alert, que Chrome bloquea en contextos PWA/iframe.
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void | Promise<void>;
+  } | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(timer);
+  }, [toast]);
   const [showHistory, setShowHistory] = useState(false);
   const [lastSync, setLastSync] = useState<number | null>(null);
   const [historialAbsorcion, setHistorialAbsorcion] = useState<{id: number, fecha: string, detalle: string}[]>([]);
@@ -696,10 +713,16 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
     }
   };
 
-  const handleDeleteEvent = async (eventId: string) => {
-    if (confirm('¿Estás segura de eliminar este evento?')) {
-      await eventService.deleteEvent(eventId);
-    }
+  const handleDeleteEvent = (eventId: string) => {
+    setConfirmModal({
+      open: true,
+      title: 'Eliminar Evento',
+      message: '¿Estás segura de eliminar este evento? Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        await eventService.deleteEvent(eventId);
+        setToast({ message: 'Evento eliminado correctamente.', type: 'success' });
+      },
+    });
   };
 
   const handleUpdateConfig = async (e: React.FormEvent) => {
@@ -913,7 +936,7 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
     setHistorialAbsorcion([newEntry, ...historialAbsorcion]);
     setNayaToast({ visible: true, title: 'Sincronización de Sabiduría Completa 💎' });
     setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
-    alert(`¡Éxito! Naya ha absorbido ${(books || []).length} audiolibros, ${(audios || []).length} mentorías y ${(events || []).length} eventos en su base de datos.`);
+    setToast({ message: `¡Éxito! Naya ha absorbido ${(books || []).length} audiolibros, ${(audios || []).length} mentorías y ${(events || []).length} eventos en su base de datos.`, type: 'success' });
   };
 
   const handlePublishBook = async (e: React.FormEvent) => {
@@ -1101,28 +1124,43 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleDeleteAudio = async (id: string) => {
-    if (confirm('¿Estás segura de eliminar esta mentoría?')) {
-      await audioService.deleteAudio(id);
-      setNayaToast({ visible: true, title: 'Mentoría eliminada 🗑️' });
-      setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
-    }
+  const handleDeleteAudio = (id: string) => {
+    setConfirmModal({
+      open: true,
+      title: 'Eliminar Mentoría',
+      message: '¿Estás segura de eliminar esta mentoría? Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        await audioService.deleteAudio(id);
+        setNayaToast({ visible: true, title: 'Mentoría eliminada 🗑️' });
+        setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
+      },
+    });
   };
 
-  const handleDeleteBook = async (id: string) => {
-    if (confirm('¿Estás segura de eliminar este audiolibro?')) {
-      await bookService.deleteBook(id);
-      setNayaToast({ visible: true, title: 'Audiolibro eliminado 🗑️' });
-      setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
-    }
+  const handleDeleteBook = (id: string) => {
+    setConfirmModal({
+      open: true,
+      title: 'Eliminar Audiolibro',
+      message: '¿Estás segura de eliminar este audiolibro? Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        await bookService.deleteBook(id);
+        setNayaToast({ visible: true, title: 'Audiolibro eliminado 🗑️' });
+        setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
+      },
+    });
   };
 
-  const handleDeleteTalent = async (id: string) => {
-    if (confirm('¿Estás segura de eliminar este Start Talent?')) {
-      await speakerService.deleteSpeaker(id);
-      setNayaToast({ visible: true, title: 'Talento eliminado 🗑️' });
-      setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
-    }
+  const handleDeleteTalent = (id: string) => {
+    setConfirmModal({
+      open: true,
+      title: 'Eliminar Start Talent',
+      message: '¿Estás segura de eliminar este Start Talent? Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        await speakerService.deleteSpeaker(id);
+        setNayaToast({ visible: true, title: 'Talento eliminado 🗑️' });
+        setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
+      },
+    });
   };
 
   const pendingDigestItems = [
@@ -1135,17 +1173,21 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
     return dateB - dateA;
   });
 
-  const handleClearDigest = async () => {
-    if (confirm('🚀 ¿ESTÁS SEGURO?\n\nAl confirmar, todos los ítems listados dejarán de aparecer como "Novedad" en el próximo comercial de los lunes. Esta acción no se puede deshacer.')) {
-      try {
-        await editorialService.clearPendingDigest();
-        setNayaToast({ visible: true, title: 'Lanzamiento confirmado ✨' });
-        setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
-      } catch (err) {
-        setNayaToast({ visible: true, title: 'Error al limpiar bandeja ❌' });
-        setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
-      }
-    }
+  const handleClearDigest = () => {
+    setConfirmModal({
+      open: true,
+      title: '🚀 ¿Estás seguro?',
+      message: 'Al confirmar, todos los ítems listados dejarán de aparecer como "Novedad" en el próximo comercial de los lunes. Esta acción no se puede deshacer.',
+      onConfirm: async () => {
+        try {
+          await editorialService.clearPendingDigest();
+          setNayaToast({ visible: true, title: 'Lanzamiento confirmado ✨' });
+          setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
+        } catch (err) {
+          setToast({ message: 'Error al limpiar la bandeja. Inténtalo de nuevo.', type: 'error' });
+        }
+      },
+    });
   };
 
   // Expiry Alerts logic
@@ -1242,6 +1284,95 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
               className="absolute top-4 right-4 text-white/40 hover:text-white"
             >
               <X size={16} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Modal de Confirmación (reemplaza window.confirm) */}
+      <AnimatePresence>
+        {confirmModal?.open && (
+          <div className="fixed inset-0 z-[12000] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              onClick={() => !confirmLoading && setConfirmModal(null)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 20 }}
+              className="relative z-10 w-full max-w-md bg-bg-card border border-border rounded-[24px] p-7 shadow-[0_20px_80px_rgba(0,0,0,0.6)]"
+            >
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 flex-shrink-0 bg-accent/15 rounded-2xl flex items-center justify-center text-accent">
+                  <AlertCircle size={26} />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-black text-white uppercase tracking-tight leading-tight">
+                    {confirmModal.title}
+                  </h3>
+                  <p className="text-sm text-text-dim leading-relaxed whitespace-pre-line">
+                    {confirmModal.message}
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-3 mt-7">
+                <button
+                  onClick={() => setConfirmModal(null)}
+                  disabled={confirmLoading}
+                  className="flex-1 py-3 rounded-2xl bg-transparent border border-border text-text-dim font-black uppercase tracking-widest text-xs hover:text-white hover:border-white/30 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    if (!confirmModal) return;
+                    try {
+                      setConfirmLoading(true);
+                      await confirmModal.onConfirm();
+                    } finally {
+                      setConfirmLoading(false);
+                      setConfirmModal(null);
+                    }
+                  }}
+                  disabled={confirmLoading}
+                  className="flex-1 py-3 rounded-2xl bg-accent text-black font-black uppercase tracking-widest text-xs shadow-lg shadow-accent/20 hover:brightness-110 transition-all active:scale-95 disabled:opacity-50"
+                >
+                  {confirmLoading ? 'Procesando...' : 'Confirmar'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Notificación Toast (reemplaza alert) */}
+      <AnimatePresence>
+        {toast && (
+          <motion.div
+            initial={{ opacity: 0, x: 100 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 100 }}
+            className={`fixed top-10 right-10 z-[12500] flex items-center gap-4 max-w-sm bg-bg-card border-2 p-5 rounded-[20px] shadow-[0_20px_80px_rgba(0,0,0,0.5)] backdrop-blur-xl ${
+              toast.type === 'success' ? 'border-accent' : 'border-red-500'
+            }`}
+          >
+            <div
+              className={`w-11 h-11 flex-shrink-0 rounded-full flex items-center justify-center ${
+                toast.type === 'success' ? 'bg-accent/20 text-accent' : 'bg-red-500/20 text-red-500'
+              }`}
+            >
+              {toast.type === 'success' ? <CheckCircle2 size={24} /> : <AlertCircle size={24} />}
+            </div>
+            <p className="text-sm font-bold text-white leading-snug whitespace-pre-line">{toast.message}</p>
+            <button
+              onClick={() => setToast(null)}
+              className="absolute top-3 right-3 text-white/40 hover:text-white"
+            >
+              <X size={14} />
             </button>
           </motion.div>
         )}
@@ -1404,6 +1535,31 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                           <td className="px-6 py-4 text-text-dim text-sm">{audio.author}</td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  // D4: Enviar este contenido al Calendario Editorial.
+                                  // Mentorías -> "Audios de la Semana"; Audiolibros -> "Libros del Mes".
+                                  const type = audio.contentType === 'audiobook' ? 'monthly_book' : 'weekly_audio';
+                                  const etiqueta = type === 'monthly_book' ? 'Libros del Mes' : 'Audios de la Semana';
+                                  setConfirmModal({
+                                    open: true,
+                                    title: 'Enviar al Calendario Editorial',
+                                    message: `¿Enviar "${audio.title}" al Calendario Editorial (${etiqueta})?`,
+                                    onConfirm: async () => {
+                                      try {
+                                        const { startDate } = await editorialService.appendToEditorial(audio.id, type);
+                                        setToast({ message: `"${audio.title}" se programó en ${etiqueta} a partir del ${new Date(startDate).toLocaleDateString()}.`, type: 'success' });
+                                      } catch (e) {
+                                        setToast({ message: 'No se pudo enviar al Calendario Editorial. Inténtalo de nuevo.', type: 'error' });
+                                      }
+                                    },
+                                  });
+                                }}
+                                className="p-2 hover:bg-emerald-500/10 hover:text-emerald-400 rounded-lg transition-colors"
+                                title="Enviar al Calendario Editorial"
+                              >
+                                <Calendar size={16} />
+                              </button>
                               <button onClick={() => handleEditAudio(audio)} className="p-2 hover:bg-accent/10 hover:text-accent rounded-lg transition-colors"><Edit2 size={16} /></button>
                               <button onClick={() => handleDeleteAudio(audio.id)} className="p-2 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16} /></button>
                             </div>
@@ -2250,10 +2406,16 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                                 </div>
                               </div>
                               <button 
-                                onClick={async () => {
-                                  if(confirm('¿Deseas eliminar este libro de la biblioteca?')) {
-                                    await bookService.deleteBook(book.id);
-                                  }
+                                onClick={() => {
+                                  setConfirmModal({
+                                    open: true,
+                                    title: 'Eliminar Libro',
+                                    message: '¿Deseas eliminar este libro de la biblioteca? Esta acción no se puede deshacer.',
+                                    onConfirm: async () => {
+                                      await bookService.deleteBook(book.id);
+                                      setToast({ message: 'Libro eliminado correctamente.', type: 'success' });
+                                    },
+                                  });
                                 }}
                                 className="p-2 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
                               >
@@ -2507,11 +2669,17 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                           </div>
                         </div>
                         <button 
-                          onClick={async () => {
-                            if(confirm('¿Seguro que deseas eliminar esta mentoría?')) {
-                              await audioService.deleteAudio(audio.id);
-                              setAudios(p => p.filter(a => a.id !== audio.id));
-                            }
+                          onClick={() => {
+                            setConfirmModal({
+                              open: true,
+                              title: 'Eliminar Mentoría',
+                              message: '¿Seguro que deseas eliminar esta mentoría? Esta acción no se puede deshacer.',
+                              onConfirm: async () => {
+                                await audioService.deleteAudio(audio.id);
+                                setAudios(p => p.filter(a => a.id !== audio.id));
+                                setToast({ message: 'Mentoría eliminada correctamente.', type: 'success' });
+                              },
+                            });
                           }}
                           className="p-2 text-red-500 opacity-0 group-hover:opacity-100 hover:bg-red-500/10 rounded-lg transition-all"
                         >
@@ -2925,9 +3093,9 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                                   contentId: audio.id, 
                                   contentType: audio.contentType 
                                 });
-                                alert(`Programado: ${audio.title}`);
+                                setToast({ message: `Programado: ${audio.title}`, type: 'success' });
                               } else {
-                                alert("No hay ranuras futuras disponibles. Usa autoprogramar primero.");
+                                setToast({ message: 'No hay ranuras futuras disponibles. Usa autoprogramar primero.', type: 'error' });
                               }
                             }}
                             className="text-accent text-[10px] font-black uppercase hover:underline ml-2"
@@ -2951,9 +3119,24 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                       </div>
                       <button 
                         onClick={() => {
-                          if (window.confirm('¿Deseas autoprogramar solo los Audios (Mentoring)?')) {
-                            editorialService.autoProgramAudios();
-                          }
+                          setConfirmModal({
+                            open: true,
+                            title: 'Autoprogramar Audios',
+                            message: '¿Deseas autoprogramar solo los Audios (Mentoring)?',
+                            onConfirm: async () => {
+                              try {
+                                const created = await editorialService.autoProgramAudios();
+                                setToast({
+                                  message: created > 0
+                                    ? `Se autoprogramaron ${created} semana(s) de Audios de la Semana.`
+                                    : 'El calendario de Audios ya estaba completo (20 semanas).',
+                                  type: 'success',
+                                });
+                              } catch (e) {
+                                setToast({ message: 'Ocurrió un error al autoprogramar los Audios. Inténtalo de nuevo.', type: 'error' });
+                              }
+                            },
+                          });
                         }}
                         className="px-4 py-2 bg-accent/10 text-accent rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-accent hover:text-black transition-all flex items-center gap-2"
                       >
@@ -3003,9 +3186,24 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                       </div>
                       <button 
                         onClick={() => {
-                          if (window.confirm('¿Deseas autoprogramar solo los Libros (Audiolibros)?')) {
-                            editorialService.autoProgramBooks();
-                          }
+                          setConfirmModal({
+                            open: true,
+                            title: 'Autoprogramar Libros',
+                            message: '¿Deseas autoprogramar solo los Libros (Audiolibros)?',
+                            onConfirm: async () => {
+                              try {
+                                const created = await editorialService.autoProgramBooks();
+                                setToast({
+                                  message: created > 0
+                                    ? `Se autoprogramaron ${created} mes(es) de Libros del Mes.`
+                                    : 'El calendario de Libros ya estaba completo (5 meses).',
+                                  type: 'success',
+                                });
+                              } catch (e) {
+                                setToast({ message: 'Ocurrió un error al autoprogramar los Libros. Inténtalo de nuevo.', type: 'error' });
+                              }
+                            },
+                          });
                         }}
                         className="px-4 py-2 bg-orange-500/10 text-orange-500 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-orange-500 hover:text-black transition-all flex items-center gap-2"
                       >
@@ -3195,11 +3393,17 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                               <Edit2 size={16} />
                             </button>
                             <button 
-                              onClick={async () => {
-                                if (confirm('¿Eliminar este nivel?')) {
-                                  const updatedLevels = path.levels.filter(l => l.id !== level.id);
-                                  await successPathService.updatePath(path.id, { levels: updatedLevels });
-                                }
+                              onClick={() => {
+                                setConfirmModal({
+                                  open: true,
+                                  title: 'Eliminar Nivel',
+                                  message: '¿Eliminar este nivel? Esta acción no se puede deshacer.',
+                                  onConfirm: async () => {
+                                    const updatedLevels = path.levels.filter(l => l.id !== level.id);
+                                    await successPathService.updatePath(path.id, { levels: updatedLevels });
+                                    setToast({ message: 'Nivel eliminado correctamente.', type: 'success' });
+                                  },
+                                });
                               }}
                               className="p-2 bg-red-950/30 rounded-lg text-red-500 hover:bg-red-950/50 transition-colors"
                             >
@@ -3837,13 +4041,18 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                                 </button>
                                 <button
                                   disabled={(talent.pendingPlays || 0) === 0}
-                                  onClick={async () => {
+                                  onClick={() => {
                                     const amount = (talent.pendingPlays || 0) * (appConfig?.commissionRate || 0.10);
-                                    if (confirm(`¿Confirmas el pago de $${amount.toFixed(2)} a ${talent.name}?`)) {
-                                      await commissionService.settleTalent(talent.id, talent.name, amount, talent.pendingPlays || 0);
-                                      setNayaToast({ visible: true, title: `Liquidación de ${talent.name} exitosa ✅` });
-                                      setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
-                                    }
+                                    setConfirmModal({
+                                      open: true,
+                                      title: 'Confirmar Pago',
+                                      message: `¿Confirmas el pago de $${amount.toFixed(2)} a ${talent.name}?`,
+                                      onConfirm: async () => {
+                                        await commissionService.settleTalent(talent.id, talent.name, amount, talent.pendingPlays || 0);
+                                        setNayaToast({ visible: true, title: `Liquidación de ${talent.name} exitosa ✅` });
+                                        setTimeout(() => setNayaToast({ visible: false, title: '' }), 3000);
+                                      },
+                                    });
                                   }}
                                   className="bg-accent/10 hover:bg-accent text-accent hover:text-black px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all disabled:opacity-20 disabled:pointer-events-none"
                                 >

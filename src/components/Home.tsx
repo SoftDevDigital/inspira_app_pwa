@@ -158,6 +158,18 @@ export default function Home({
     return getWeeklyAudio(audios);
   }, [audios, editorialSlots]);
 
+  // Libro del Mes (Calendario Editorial): buscamos el slot mensual activo.
+  // Los "Libros del Mes" se programan sobre la colección de audios (audiolibros).
+  const monthlyBook = useMemo(() => {
+    const now = new Date().toISOString();
+    const activeSlot = editorialSlots.find(s => s.type === 'monthly_book' && s.startDate <= now && s.endDate >= now);
+    if (activeSlot) {
+      const scheduledAudio = audios.find(a => a.id === activeSlot.contentId);
+      if (scheduledAudio) return scheduledAudio;
+    }
+    return null;
+  }, [audios, editorialSlots]);
+
   const isElegant = theme === 'elegant';
 
   const mentorings = useMemo(() => audios.filter(a => {
@@ -698,9 +710,9 @@ export default function Home({
                 </div>
               </div>
 
-              {/* Card 2: Books */}
+              {/* Card 2: Libro del Mes (Calendario Editorial) */}
               <button 
-                onClick={() => onNavigate?.('books')}
+                onClick={() => monthlyBook ? onSelectAudio(monthlyBook) : onNavigate?.('books')}
                 className={`w-[90%] h-[44px] rounded-[10px] px-4 flex items-center gap-3 border backdrop-blur-lg relative overflow-hidden active:scale-95 transition-all ${
                   isElegant 
                     ? 'bg-gradient-to-r from-[#D4AF37] to-[#2B1B17] border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.6)]' 
@@ -709,7 +721,7 @@ export default function Home({
               >
                 <div className="shrink-0">
                   <div className={`w-7 h-7 rounded-full overflow-hidden border shadow-md ${isElegant ? 'border-white/20' : 'border-amber-300'}`}>
-                    <img src="https://picsum.photos/seed/elite-reading/200/200" alt="Lectura VIP" className="w-full h-full object-cover opacity-90" referrerPolicy="no-referrer" />
+                    <img src={monthlyBook?.coverUrl || getSpeakerPhoto(monthlyBook?.author || 'inspira')} alt="Libro del Mes" className="w-full h-full object-cover opacity-90" referrerPolicy="no-referrer" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden pr-8">
@@ -722,14 +734,14 @@ export default function Home({
                         style={{ willChange: "transform", transform: "translateZ(0)" }}
                       >
                         <span className={`text-[14px] font-medium tracking-[0.5px] uppercase italic ${isElegant ? 'text-white' : 'text-zinc-800'}`}>
-                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-amber-600'}>Libro:</span> El club de las 5 de la mañana
+                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-amber-600'}>Libro:</span> {monthlyBook?.title || 'Próximamente'}
                         </span>
                         <span className={`text-[14px] font-medium tracking-[0.5px] uppercase italic ${isElegant ? 'text-white' : 'text-zinc-800'}`}>
-                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-amber-600'}>Libro:</span> El club de las 5 de la mañana
+                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-amber-600'}>Libro:</span> {monthlyBook?.title || 'Próximamente'}
                         </span>
                       </motion.div>
                     </div>
-                    <span className={`text-[12px] font-medium tracking-[0.5px] uppercase italic leading-none ${isElegant ? 'text-white/60' : 'text-zinc-500'}`}>Autor Robin Sharma</span>
+                    <span className={`text-[12px] font-medium tracking-[0.5px] uppercase italic leading-none ${isElegant ? 'text-white/60' : 'text-zinc-500'}`}>{monthlyBook?.author ? `Autor ${monthlyBook.author}` : 'Biblioteca INSPIRA'}</span>
                   </div>
                 </div>
                 <div className="absolute right-3 flex items-center justify-center">

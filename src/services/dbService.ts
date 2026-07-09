@@ -700,7 +700,9 @@ export const editorialService = {
       .sort((a, b) => (a.plays || 0) - (b.plays || 0))
       .slice(0, limitCount);
   },
-  async autoProgramAudios() {
+  // Autoprograma 20 semanas de "Audios de la Semana" (mentorías), 1 por semana.
+  // Devuelve la cantidad de slots efectivamente creados para dar feedback en la UI.
+  async autoProgramAudios(): Promise<number> {
     const audios = await audioService.getAudiobooks();
     const editorialSlots = await this.getEditorialSlots();
 
@@ -712,6 +714,7 @@ export const editorialService = {
     nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
     nextMonday.setHours(0, 0, 0, 0);
 
+    let created = 0;
     for (let i = 0; i < 20; i++) {
       const startDate = new Date(nextMonday);
       startDate.setDate(startDate.getDate() + (i * 7));
@@ -728,11 +731,15 @@ export const editorialService = {
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
         });
+        created++;
       }
     }
+    return created;
   },
 
-  async autoProgramBooks() {
+  // Autoprograma 5 meses de "Libros del Mes" (audiolibros), 1 por mes.
+  // Devuelve la cantidad de slots efectivamente creados para dar feedback en la UI.
+  async autoProgramBooks(): Promise<number> {
     const audios = await audioService.getAudiobooks();
     const editorialSlots = await this.getEditorialSlots();
 
@@ -745,6 +752,7 @@ export const editorialService = {
     firstOfNextMonth.setDate(1);
     firstOfNextMonth.setHours(0, 0, 0, 0);
 
+    let created = 0;
     for (let i = 0; i < 5; i++) {
       const startDate = new Date(firstOfNextMonth);
       startDate.setMonth(startDate.getMonth() + i);
@@ -762,8 +770,65 @@ export const editorialService = {
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
         });
+        created++;
       }
     }
+    return created;
+  },
+
+  // Envía un audio/mentoría al Calendario Editorial ocupando el próximo slot
+  // futuro disponible del tipo indicado (o creando uno nuevo al final de la serie).
+  async appendToEditorial(contentId: string, type: 'weekly_audio' | 'monthly_book' = 'weekly_audio'): Promise<{ startDate: string }> {
+    const editorialSlots = await this.getEditorialSlots();
+    const contentType = type === 'weekly_audio' ? 'mentoring' : 'audiobook';
+    const now = new Date();
+
+    const sameType = editorialSlots
+      .filter(s => s.type === type)
+      .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+    // 1) Reutilizar un slot futuro sin contenido asignado, si existe.
+    const emptyFuture = sameType.find(s => new Date(s.endDate) >= now && !s.contentId);
+    if (emptyFuture) {
+      await this.updateEditorialSlot(emptyFuture.id, { contentId, contentType });
+      return { startDate: emptyFuture.startDate };
+    }
+
+    // 2) Crear un nuevo slot inmediatamente después del último programado.
+    const last = sameType[sameType.length - 1];
+    let startDate: Date;
+    if (last) {
+      startDate = new Date(last.startDate);
+      if (type === 'weekly_audio') startDate.setDate(startDate.getDate() + 7);
+      else startDate.setMonth(startDate.getMonth() + 1);
+    } else if (type === 'weekly_audio') {
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() + (1 + 7 - startDate.getDay()) % 7);
+      startDate.setHours(0, 0, 0, 0);
+    } else {
+      startDate = new Date();
+      startDate.setMonth(startDate.getMonth() + 1);
+      startDate.setDate(1);
+      startDate.setHours(0, 0, 0, 0);
+    }
+
+    const endDate = new Date(startDate);
+    if (type === 'weekly_audio') {
+      endDate.setDate(endDate.getDate() + 6);
+    } else {
+      endDate.setMonth(endDate.getMonth() + 1);
+      endDate.setDate(0);
+    }
+    endDate.setHours(23, 59, 59, 999);
+
+    await this.createEditorialSlot({
+      type,
+      contentType,
+      contentId,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    });
+    return { startDate: startDate.toISOString() };
   },
 
   async clearPendingDigest() {
