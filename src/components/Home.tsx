@@ -167,7 +167,14 @@ export default function Home({
       const scheduledAudio = audios.find(a => a.id === activeSlot.contentId);
       if (scheduledAudio) return scheduledAudio;
     }
-    return null;
+    // Fallback (fix BUG #2): si no hay slot editorial activo, seleccionamos un
+    // audio de forma determinista según el mes actual, para no mostrar siempre
+    // "Próximamente". Preferimos audiolibros; si no hay, usamos cualquier audio.
+    if (audios.length === 0) return null;
+    const pool = audios.filter(a => a.contentType === 'audiobook');
+    const source = pool.length > 0 ? pool : audios;
+    const monthIndex = new Date().getMonth();
+    return source[monthIndex % source.length] || source[0];
   }, [audios, editorialSlots]);
 
   const isElegant = theme === 'elegant';

@@ -52,8 +52,26 @@ function openDB(): Promise<IDBDatabase> {
   return dbPromise;
 }
 
-/** Guarda (o actualiza) el estado del reproductor. */
+const LS_KEY = 'inspira_player_state';
+
+/**
+ * Guarda (o actualiza) el estado del reproductor.
+ *
+ * IMPORTANTE (fix BUG #1): SIEMPRE escribe primero en localStorage de forma
+ * SÍNCRONA. Esto garantiza que el estado (incluida la posición real) quede
+ * persistido incluso cuando la página se cierra en el evento `beforeunload`,
+ * ya que IndexedDB es asíncrono y su Promise no llega a completar antes de que
+ * el navegador destruya la página. IndexedDB se usa como respaldo adicional.
+ */
 export async function savePlayerState(state: PlayerState): Promise<void> {
+  // 1. SIEMPRE guardar en localStorage sincrónicamente (garantizado antes del unload).
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(state));
+  } catch {
+    /* noop */
+  }
+
+  // 2. También guardar en IndexedDB (best effort, asíncrono).
   try {
     const db = await openDB();
     await new Promise<void>((resolve, reject) => {
@@ -62,34 +80,49 @@ export async function savePlayerState(state: PlayerState): Promise<void> {
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
     });
-  } catch (e) {
-    // Fallback silencioso a localStorage si IndexedDB no está disponible.
-    try {
-      localStorage.setItem('inspira_player_state', JSON.stringify(state));
-    } catch {
-      /* noop */
-    }
+  } catch {
+    /* noop - localStorage ya tiene el respaldo */
   }
 }
 
-/** Recupera el estado guardado (o null si no existe / está vencido). */
+/**
+ * Recupera el estado guardado (o null si no existe / está vencido).
+ *
+ * Fix BUG #1: compara los timestamps de IndexedDB y localStorage y usa el más
+ * reciente, porque el guardado periódico puede dejar valores distintos en cada
+ * almacén (localStorage se escribe siempre; IndexedDB a veces no alcanza).
+ */
 export async function loadPlayerState(): Promise<PlayerState | null> {
-  let state: PlayerState | null = null;
+  let idbState: PlayerState | null = null;
+  let lsState: PlayerState | null = null;
+
+  // Intentar IndexedDB.
   try {
     const db = await openDB();
-    state = await new Promise<PlayerState | null>((resolve, reject) => {
+    idbState = await new Promise<PlayerState | null>((resolve, reject) => {
       const tx = db.transaction(STORE, 'readonly');
       const req = tx.objectStore(STORE).get(STATE_KEY);
       req.onsuccess = () => resolve((req.result as PlayerState) || null);
       req.onerror = () => reject(req.error);
     });
-  } catch (e) {
-    try {
-      const raw = localStorage.getItem('inspira_player_state');
-      state = raw ? (JSON.parse(raw) as PlayerState) : null;
-    } catch {
-      state = null;
-    }
+  } catch {
+    idbState = null;
+  }
+
+  // Intentar localStorage.
+  try {
+    const raw = localStorage.getItem(LS_KEY);
+    lsState = raw ? (JSON.parse(raw) as PlayerState) : null;
+  } catch {
+    lsState = null;
+  }
+
+  // Usar el más reciente (comparar timestamps).
+  let state: PlayerState | null = null;
+  if (idbState && lsState) {
+    state = (idbState.timestamp || 0) >= (lsState.timestamp || 0) ? idbState : lsState;
+  } else {
+    state = idbState || lsState;
   }
 
   if (!state) return null;

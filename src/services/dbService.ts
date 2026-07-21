@@ -743,9 +743,14 @@ export const editorialService = {
     const audios = await audioService.getAudiobooks();
     const editorialSlots = await this.getEditorialSlots();
 
-    const bookAudios = [...audios]
-      .filter(a => a.contentType === 'audiobook')
-      .sort((a, b) => (a.plays || 0) - (b.plays || 0));
+    // Fix BUG #2: preferimos audiolibros, pero si no hay ninguno (todos los
+    // audios tienen contentType 'mentoring'), hacemos fallback a cualquier
+    // audio para poder programar igualmente los "Libros del Mes".
+    let bookPool = [...audios].filter(a => a.contentType === 'audiobook');
+    if (bookPool.length === 0) {
+      bookPool = [...audios];
+    }
+    const bookAudios = bookPool.sort((a, b) => (a.plays || 0) - (b.plays || 0));
 
     const firstOfNextMonth = new Date();
     firstOfNextMonth.setMonth(firstOfNextMonth.getMonth() + 1);

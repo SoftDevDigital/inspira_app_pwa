@@ -775,6 +775,24 @@ export default function App() {
     };
   }, [currentAudio?.id, isPlaying, currentTime, duration]);
 
+  // Guardado periódico cada 5s durante la reproducción (fix BUG #1).
+  // No depende del evento `timeupdate` (que el navegador puede throttlear en
+  // segundo plano); usa audioRef.current.currentTime directamente.
+  useEffect(() => {
+    if (!isPlaying || !currentAudio) return;
+    const interval = setInterval(() => {
+      if (audioRef.current && !audioRef.current.paused) {
+        const pos = audioRef.current.currentTime;
+        if (pos > 0) {
+          lastSaveRef.current = Date.now();
+          persistPlayer(pos, true);
+        }
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPlaying, currentAudio?.id]);
+
   const handleLoadedMetadata = () => {
     if (audioRef.current) {
       setDuration(audioRef.current.duration);
