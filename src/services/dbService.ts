@@ -710,19 +710,37 @@ export const editorialService = {
       .filter(a => a.contentType === 'mentoring')
       .sort((a, b) => (a.plays || 0) - (b.plays || 0));
 
-    const nextMonday = new Date();
-    nextMonday.setDate(nextMonday.getDate() + (1 + 7 - nextMonday.getDay()) % 7);
-    nextMonday.setHours(0, 0, 0, 0);
+    // Fix BUG #1: partir desde el día siguiente (7 días) al último slot
+    // existente en vez de siempre desde "próximo lunes desde hoy". Así evitamos
+    // generar startDates ligeramente distintas (y por ende duplicados) si la
+    // autoprogramación se ejecuta en días diferentes.
+    const existingWeekly = editorialSlots
+      .filter(s => s.type === 'weekly_audio')
+      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+
+    let startPoint: Date;
+    if (existingWeekly.length > 0) {
+      startPoint = new Date(existingWeekly[0].startDate);
+      startPoint.setDate(startPoint.getDate() + 7);
+    } else {
+      startPoint = new Date();
+      const dayOfWeek = startPoint.getDay();
+      const daysUntilMonday = dayOfWeek === 1 ? 7 : (1 + 7 - dayOfWeek) % 7;
+      startPoint.setDate(startPoint.getDate() + (daysUntilMonday || 7));
+    }
+    startPoint.setHours(0, 0, 0, 0);
 
     let created = 0;
     for (let i = 0; i < 20; i++) {
-      const startDate = new Date(nextMonday);
+      const startDate = new Date(startPoint);
       startDate.setDate(startDate.getDate() + (i * 7));
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 6);
       endDate.setHours(23, 59, 59, 999);
 
-      const existing = editorialSlots.find(s => s.type === 'weekly_audio' && s.startDate === startDate.toISOString());
+      // Comparar por DÍA (YYYY-MM-DD) y no por ISO exacto para evitar duplicados por timezone/hora.
+      const startDayStr = startDate.toISOString().slice(0, 10);
+      const existing = editorialSlots.find(s => s.type === 'weekly_audio' && s.startDate.slice(0, 10) === startDayStr);
       if (!existing && mentoringAudios[i]) {
         await this.createEditorialSlot({
           type: 'weekly_audio',
@@ -740,38 +758,50 @@ export const editorialService = {
   // Autoprograma 5 meses de "Libros del Mes" (audiolibros), 1 por mes.
   // Devuelve la cantidad de slots efectivamente creados para dar feedback en la UI.
   async autoProgramBooks(): Promise<number> {
-    const audios = await audioService.getAudiobooks();
+    // Fix BUG #2: los libros reales del admin viven en la colección 'books'
+    // (bookService), no en 'audiobooks' (audioService).
+    const realBooks = await bookService.getBooks();
     const editorialSlots = await this.getEditorialSlots();
 
-    // Fix BUG #2: preferimos audiolibros, pero si no hay ninguno (todos los
-    // audios tienen contentType 'mentoring'), hacemos fallback a cualquier
-    // audio para poder programar igualmente los "Libros del Mes".
-    let bookPool = [...audios].filter(a => a.contentType === 'audiobook');
-    if (bookPool.length === 0) {
-      bookPool = [...audios];
-    }
-    const bookAudios = bookPool.sort((a, b) => (a.plays || 0) - (b.plays || 0));
+    const bookPool = [...realBooks].sort((a, b) =>
+      new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime()
+    );
 
-    const firstOfNextMonth = new Date();
-    firstOfNextMonth.setMonth(firstOfNextMonth.getMonth() + 1);
-    firstOfNextMonth.setDate(1);
-    firstOfNextMonth.setHours(0, 0, 0, 0);
+    // Fix BUG #1: partir desde el mes siguiente al último slot existente en vez
+    // de siempre desde "primer día del mes siguiente a hoy", evitando duplicados.
+    const existingMonthly = editorialSlots
+      .filter(s => s.type === 'monthly_book')
+      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+
+    let startPoint: Date;
+    if (existingMonthly.length > 0) {
+      startPoint = new Date(existingMonthly[0].startDate);
+      startPoint.setMonth(startPoint.getMonth() + 1);
+      startPoint.setDate(1);
+    } else {
+      startPoint = new Date();
+      startPoint.setMonth(startPoint.getMonth() + 1);
+      startPoint.setDate(1);
+    }
+    startPoint.setHours(0, 0, 0, 0);
 
     let created = 0;
     for (let i = 0; i < 5; i++) {
-      const startDate = new Date(firstOfNextMonth);
+      const startDate = new Date(startPoint);
       startDate.setMonth(startDate.getMonth() + i);
       const endDate = new Date(startDate);
       endDate.setMonth(endDate.getMonth() + 1);
       endDate.setDate(0); 
       endDate.setHours(23, 59, 59, 999);
 
-      const existing = editorialSlots.find(s => s.type === 'monthly_book' && s.startDate === startDate.toISOString());
-      if (!existing && bookAudios[i]) {
+      // Comparar por MES+AÑO (YYYY-MM) para evitar duplicados en el mismo mes.
+      const startMonthStr = startDate.toISOString().slice(0, 7);
+      const existing = editorialSlots.find(s => s.type === 'monthly_book' && s.startDate.slice(0, 7) === startMonthStr);
+      if (!existing && bookPool[i]) {
         await this.createEditorialSlot({
           type: 'monthly_book',
-          contentType: 'audiobook',
-          contentId: bookAudios[i].id,
+          contentType: 'book',
+          contentId: bookPool[i].id,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
         });
@@ -785,7 +815,8 @@ export const editorialService = {
   // futuro disponible del tipo indicado (o creando uno nuevo al final de la serie).
   async appendToEditorial(contentId: string, type: 'weekly_audio' | 'monthly_book' = 'weekly_audio'): Promise<{ startDate: string }> {
     const editorialSlots = await this.getEditorialSlots();
-    const contentType = type === 'weekly_audio' ? 'mentoring' : 'audiobook';
+    // Fix BUG #1: para monthly_book usamos contentType 'book' (colección books).
+    const contentType = type === 'weekly_audio' ? 'mentoring' : 'book';
     const now = new Date();
 
     const sameType = editorialSlots

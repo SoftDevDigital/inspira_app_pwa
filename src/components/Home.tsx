@@ -159,23 +159,30 @@ export default function Home({
   }, [audios, editorialSlots]);
 
   // Libro del Mes (Calendario Editorial): buscamos el slot mensual activo.
-  // Los "Libros del Mes" se programan sobre la colección de audios (audiolibros).
-  const monthlyBook = useMemo(() => {
+  // El admin puede programar un libro de la colección 'books' o un audio de
+  // la colección 'audiobooks'. Buscamos en ambas para no perder contenido.
+  const monthlyBook = useMemo((): { item: Audio | Book; isBook: boolean } | null => {
     const now = new Date().toISOString();
     const activeSlot = editorialSlots.find(s => s.type === 'monthly_book' && s.startDate <= now && s.endDate >= now);
     if (activeSlot) {
+      // Buscar primero en audios (audiobooks)
       const scheduledAudio = audios.find(a => a.id === activeSlot.contentId);
-      if (scheduledAudio) return scheduledAudio;
+      if (scheduledAudio) return { item: scheduledAudio, isBook: false };
+      // Buscar también en la colección de libros
+      const scheduledBook = (books || []).find(b => b.id === activeSlot.contentId);
+      if (scheduledBook) return { item: scheduledBook, isBook: true };
     }
-    // Fallback (fix BUG #2): si no hay slot editorial activo, seleccionamos un
-    // audio de forma determinista según el mes actual, para no mostrar siempre
-    // "Próximamente". Preferimos audiolibros; si no hay, usamos cualquier audio.
-    if (audios.length === 0) return null;
-    const pool = audios.filter(a => a.contentType === 'audiobook');
-    const source = pool.length > 0 ? pool : audios;
+    // Fallback: si no hay slot editorial activo, seleccionamos contenido determinista
+    // según el mes actual para no mostrar siempre "Próximamente".
     const monthIndex = new Date().getMonth();
-    return source[monthIndex % source.length] || source[0];
-  }, [audios, editorialSlots]);
+    // Preferir libros reales, luego audiolibros, luego cualquier audio
+    const bookPool = books || [];
+    if (bookPool.length > 0) return { item: bookPool[monthIndex % bookPool.length], isBook: true };
+    const audioPool = audios.filter(a => a.contentType === 'audiobook');
+    if (audioPool.length > 0) return { item: audioPool[monthIndex % audioPool.length], isBook: false };
+    if (audios.length > 0) return { item: audios[monthIndex % audios.length], isBook: false };
+    return null;
+  }, [audios, books, editorialSlots]);
 
   const isElegant = theme === 'elegant';
 
@@ -719,7 +726,14 @@ export default function Home({
 
               {/* Card 2: Libro del Mes (Calendario Editorial) */}
               <button 
-                onClick={() => monthlyBook ? onSelectAudio(monthlyBook) : onNavigate?.('books')}
+                onClick={() => {
+                  if (!monthlyBook) { onNavigate?.('books'); return; }
+                  if (monthlyBook.isBook) {
+                    onSelectBook?.(monthlyBook.item as Book);
+                  } else {
+                    onSelectAudio(monthlyBook.item as Audio);
+                  }
+                }}
                 className={`w-[90%] h-[44px] rounded-[10px] px-4 flex items-center gap-3 border backdrop-blur-lg relative overflow-hidden active:scale-95 transition-all ${
                   isElegant 
                     ? 'bg-gradient-to-r from-[#D4AF37] to-[#2B1B17] border-white/10 shadow-[0_4px_15px_rgba(0,0,0,0.6)]' 
@@ -728,7 +742,7 @@ export default function Home({
               >
                 <div className="shrink-0">
                   <div className={`w-7 h-7 rounded-full overflow-hidden border shadow-md ${isElegant ? 'border-white/20' : 'border-amber-300'}`}>
-                    <img src={monthlyBook?.coverUrl || getSpeakerPhoto(monthlyBook?.author || 'inspira')} alt="Libro del Mes" className="w-full h-full object-cover opacity-90" referrerPolicy="no-referrer" />
+                    <img src={monthlyBook?.item?.coverUrl || getSpeakerPhoto((monthlyBook?.item as Audio)?.author || 'inspira')} alt="Libro del Mes" className="w-full h-full object-cover opacity-90" referrerPolicy="no-referrer" />
                   </div>
                 </div>
                 <div className="flex-1 min-w-0 overflow-hidden pr-8">
@@ -741,14 +755,14 @@ export default function Home({
                         style={{ willChange: "transform", transform: "translateZ(0)" }}
                       >
                         <span className={`text-[14px] font-medium tracking-[0.5px] uppercase italic ${isElegant ? 'text-white' : 'text-zinc-800'}`}>
-                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-amber-600'}>Libro:</span> {monthlyBook?.title || 'Próximamente'}
+                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-amber-600'}>Libro:</span> {monthlyBook?.item?.title || 'Próximamente'}
                         </span>
                         <span className={`text-[14px] font-medium tracking-[0.5px] uppercase italic ${isElegant ? 'text-white' : 'text-zinc-800'}`}>
-                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-amber-600'}>Libro:</span> {monthlyBook?.title || 'Próximamente'}
+                          <span className={isElegant ? 'text-[#D4AF37]' : 'text-amber-600'}>Libro:</span> {monthlyBook?.item?.title || 'Próximamente'}
                         </span>
                       </motion.div>
                     </div>
-                    <span className={`text-[12px] font-medium tracking-[0.5px] uppercase italic leading-none ${isElegant ? 'text-white/60' : 'text-zinc-500'}`}>{monthlyBook?.author ? `Autor ${monthlyBook.author}` : 'Biblioteca INSPIRA'}</span>
+                    <span className={`text-[12px] font-medium tracking-[0.5px] uppercase italic leading-none ${isElegant ? 'text-white/60' : 'text-zinc-500'}`}>{monthlyBook?.item?.author ? `Autor ${monthlyBook.item.author}` : 'Biblioteca INSPIRA'}</span>
                   </div>
                 </div>
                 <div className="absolute right-3 flex items-center justify-center">

@@ -1498,6 +1498,27 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                           <td className="px-6 py-4 text-text-dim text-sm">{book.author}</td>
                           <td className="px-6 py-4 text-right">
                             <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => {
+                                  setConfirmModal({
+                                    open: true,
+                                    title: 'Enviar al Calendario Editorial',
+                                    message: `¿Enviar "${book.title}" al Calendario Editorial como Libro del Mes?`,
+                                    onConfirm: async () => {
+                                      try {
+                                        const { startDate } = await editorialService.appendToEditorial(book.id, 'monthly_book');
+                                        setToast({ message: `"${book.title}" se programó como Libro del Mes a partir del ${new Date(startDate).toLocaleDateString('es-ES')}.`, type: 'success' });
+                                      } catch {
+                                        setToast({ message: 'No se pudo enviar al Calendario Editorial. Inténtalo de nuevo.', type: 'error' });
+                                      }
+                                    },
+                                  });
+                                }}
+                                className="p-2 hover:bg-emerald-500/10 hover:text-emerald-400 rounded-lg transition-colors"
+                                title="Enviar al Calendario Editorial (Libro del Mes)"
+                              >
+                                <Calendar size={16} />
+                              </button>
                               <button onClick={() => handleEditBook(book)} className="p-2 hover:bg-accent/10 hover:text-accent rounded-lg transition-colors"><Edit2 size={16} /></button>
                               <button onClick={() => handleDeleteBook(book.id)} className="p-2 hover:bg-red-500/10 hover:text-red-500 rounded-lg transition-colors"><Trash2 size={16} /></button>
                             </div>
@@ -2405,22 +2426,45 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                                   </div>
                                 </div>
                               </div>
-                              <button 
-                                onClick={() => {
-                                  setConfirmModal({
-                                    open: true,
-                                    title: 'Eliminar Libro',
-                                    message: '¿Deseas eliminar este libro de la biblioteca? Esta acción no se puede deshacer.',
-                                    onConfirm: async () => {
-                                      await bookService.deleteBook(book.id);
-                                      setToast({ message: 'Libro eliminado correctamente.', type: 'success' });
-                                    },
-                                  });
-                                }}
-                                className="p-2 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
-                              >
-                                <Trash2 size={16} />
-                              </button>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => {
+                                    setConfirmModal({
+                                      open: true,
+                                      title: 'Enviar al Calendario Editorial',
+                                      message: `¿Programar "${book.title}" como Libro del Mes en el Calendario Editorial?`,
+                                      onConfirm: async () => {
+                                        try {
+                                          const { startDate } = await editorialService.appendToEditorial(book.id, 'monthly_book');
+                                          setToast({ message: `"${book.title}" se programó como Libro del Mes a partir del ${new Date(startDate).toLocaleDateString('es-ES')}.`, type: 'success' });
+                                        } catch {
+                                          setToast({ message: 'No se pudo enviar al Calendario Editorial. Inténtalo de nuevo.', type: 'error' });
+                                        }
+                                      },
+                                    });
+                                  }}
+                                  className="p-2 text-emerald-500/40 hover:text-emerald-400 hover:bg-emerald-500/10 rounded-xl transition-all"
+                                  title="Programar como Libro del Mes"
+                                >
+                                  <Calendar size={16} />
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    setConfirmModal({
+                                      open: true,
+                                      title: 'Eliminar Libro',
+                                      message: '¿Deseas eliminar este libro de la biblioteca? Esta acción no se puede deshacer.',
+                                      onConfirm: async () => {
+                                        await bookService.deleteBook(book.id);
+                                        setToast({ message: 'Libro eliminado correctamente.', type: 'success' });
+                                      },
+                                    });
+                                  }}
+                                  className="p-2 text-red-500/40 hover:text-red-500 hover:bg-red-500/10 rounded-xl transition-all"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -3216,7 +3260,10 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                         .filter(s => s.type === 'monthly_book')
                         .sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
                         .map((slot) => {
-                          const content = (audios || []).find(a => a.id === slot.contentId);
+                          // Los libros del mes viven en la colección 'books'; algunos
+                          // slots legacy pueden apuntar a la colección 'audios'.
+                          const content = (books || []).find(b => b.id === slot.contentId)
+                            || (audios || []).find(a => a.id === slot.contentId);
                           const isCurrent = new Date(slot.startDate) <= new Date() && new Date(slot.endDate) >= new Date();
                           
                           return (
@@ -3269,7 +3316,7 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                       <div className="flex justify-between items-center mb-6">
                         <div className="space-y-1">
                           <h3 className="text-xl font-bold text-white uppercase tracking-tight">Seleccionar Contenido</h3>
-                          <p className="text-xs text-text-dim font-bold uppercase">Manual replacement for slot</p>
+                          <p className="text-xs text-text-dim font-bold uppercase">Seleccioná el contenido para este slot</p>
                         </div>
                         <button 
                           onClick={() => {
@@ -3283,35 +3330,73 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                       </div>
 
                       <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                        {(audios || [])
-                          .filter(a => a.contentType === (replacingSlot.type === 'weekly_audio' ? 'mentoring' : 'audiobook'))
-                          .map((audio) => (
-                            <button
-                              key={audio.id}
-                              onClick={async () => {
-                                await editorialService.updateEditorialSlot(replacingSlot.id, { 
-                                  contentId: audio.id,
-                                  contentType: audio.contentType
-                                });
-                                setShowReplacementPicker(false);
-                                setReplacingSlot(null);
-                              }}
-                              className="w-full p-4 rounded-2xl bg-bg-deep border border-border/50 hover:border-accent transition-all flex items-center gap-4 text-left group"
-                            >
-                              <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center overflow-hidden">
-                                {audio.coverUrl ? (
-                                  <img src={audio.coverUrl} className="w-full h-full object-cover" alt="" />
-                                ) : (
-                                  <PlayCircle size={20} className="text-text-dim" />
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-black text-white truncate">{audio.title}</p>
-                                <p className="text-[10px] text-text-dim font-bold uppercase">{audio.author}</p>
-                              </div>
-                              <ArrowRight size={16} className="text-zinc-800 group-hover:text-accent transition-colors" />
-                            </button>
-                          ))}
+                        {replacingSlot.type === 'monthly_book' ? (
+                          // Libros del Mes: mostrar libros reales de la colección 'books'.
+                          (books || []).length === 0 ? (
+                            <p className="text-center text-text-dim py-8 text-sm">No hay libros disponibles. Agregalos desde el inventario.</p>
+                          ) : (
+                            (books || []).map((book) => (
+                              <button
+                                key={book.id}
+                                onClick={async () => {
+                                  await editorialService.updateEditorialSlot(replacingSlot.id, {
+                                    contentId: book.id,
+                                    contentType: 'book'
+                                  });
+                                  setShowReplacementPicker(false);
+                                  setReplacingSlot(null);
+                                  setToast({ message: `Slot actualizado con "${book.title}"`, type: 'success' });
+                                }}
+                                className="w-full p-4 rounded-2xl bg-bg-deep border border-border/50 hover:border-accent transition-all flex items-center gap-4 text-left group"
+                              >
+                                <div className="w-10 h-14 rounded-lg bg-zinc-800 flex items-center justify-center overflow-hidden">
+                                  {book.coverUrl ? (
+                                    <img src={book.coverUrl} className="w-full h-full object-cover" alt="" />
+                                  ) : (
+                                    <BookOpen size={20} className="text-text-dim" />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-black text-white truncate">{book.title}</p>
+                                  <p className="text-[10px] text-text-dim font-bold uppercase">{book.author}</p>
+                                </div>
+                                <ArrowRight size={16} className="text-zinc-800 group-hover:text-accent transition-colors" />
+                              </button>
+                            ))
+                          )
+                        ) : (
+                          // Audios de la Semana: mostrar mentorías / audios.
+                          (audios || [])
+                            .filter(a => a.contentType === 'mentoring' || a.contentType !== 'audiobook')
+                            .map((audio) => (
+                              <button
+                                key={audio.id}
+                                onClick={async () => {
+                                  await editorialService.updateEditorialSlot(replacingSlot.id, { 
+                                    contentId: audio.id,
+                                    contentType: audio.contentType
+                                  });
+                                  setShowReplacementPicker(false);
+                                  setReplacingSlot(null);
+                                  setToast({ message: `Slot actualizado con "${audio.title}"`, type: 'success' });
+                                }}
+                                className="w-full p-4 rounded-2xl bg-bg-deep border border-border/50 hover:border-accent transition-all flex items-center gap-4 text-left group"
+                              >
+                                <div className="w-10 h-10 rounded-lg bg-zinc-800 flex items-center justify-center overflow-hidden">
+                                  {audio.coverUrl ? (
+                                    <img src={audio.coverUrl} className="w-full h-full object-cover" alt="" />
+                                  ) : (
+                                    <PlayCircle size={20} className="text-text-dim" />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-black text-white truncate">{audio.title}</p>
+                                  <p className="text-[10px] text-text-dim font-bold uppercase">{audio.author}</p>
+                                </div>
+                                <ArrowRight size={16} className="text-zinc-800 group-hover:text-accent transition-colors" />
+                              </button>
+                            ))
+                        )}
                       </div>
                     </motion.div>
                   </div>
