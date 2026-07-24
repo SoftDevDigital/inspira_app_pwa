@@ -767,25 +767,15 @@ export const editorialService = {
       new Date(a.createdAt || '').getTime() - new Date(b.createdAt || '').getTime()
     );
 
-    // Fix BUG #1: partir desde el mes siguiente al último slot existente en vez
-    // de siempre desde "primer día del mes siguiente a hoy", evitando duplicados.
-    const existingMonthly = editorialSlots
-      .filter(s => s.type === 'monthly_book')
-      .sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
-
-    let startPoint: Date;
-    if (existingMonthly.length > 0) {
-      startPoint = new Date(existingMonthly[0].startDate);
-      startPoint.setMonth(startPoint.getMonth() + 1);
-      startPoint.setDate(1);
-    } else {
-      startPoint = new Date();
-      startPoint.setMonth(startPoint.getMonth() + 1);
-      startPoint.setDate(1);
-    }
-    startPoint.setHours(0, 0, 0, 0);
+    // Fix BUG #2: partir SIEMPRE desde el 1ro del MES ACTUAL (no el siguiente),
+    // para que el mes en curso quede cubierto. El loop omite meses que ya tengan
+    // slot, así que no se generan duplicados.
+    const startPoint = new Date();
+    startPoint.setDate(1);
+    startPoint.setHours(7, 0, 0, 0); // 7am consistente con los otros slots
 
     let created = 0;
+    if (bookPool.length === 0) return created;
     for (let i = 0; i < 5; i++) {
       const startDate = new Date(startPoint);
       startDate.setMonth(startDate.getMonth() + i);
@@ -797,11 +787,13 @@ export const editorialService = {
       // Comparar por MES+AÑO (YYYY-MM) para evitar duplicados en el mismo mes.
       const startMonthStr = startDate.toISOString().slice(0, 7);
       const existing = editorialSlots.find(s => s.type === 'monthly_book' && s.startDate.slice(0, 7) === startMonthStr);
-      if (!existing && bookPool[i]) {
+      if (!existing) {
+        // Cycling: si hay más meses que libros, se repite la lista de libros.
+        const book = bookPool[i % bookPool.length];
         await this.createEditorialSlot({
           type: 'monthly_book',
           contentType: 'book',
-          contentId: bookPool[i].id,
+          contentId: book.id,
           startDate: startDate.toISOString(),
           endDate: endDate.toISOString()
         });

@@ -3270,7 +3270,7 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                             <div key={slot.id} className={`p-4 rounded-2xl border flex items-center justify-between gap-4 transition-all ${isCurrent ? 'border-orange-500 bg-orange-500/5' : 'bg-bg-deep border-border'}`}>
                               <div className="min-w-0 flex-1">
                                 <p className="text-[9px] font-black text-text-dim uppercase leading-none mb-1">
-                                  {new Date(slot.startDate).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                                  {new Date(slot.startDate).toLocaleString('es-MX', { month: 'long', year: 'numeric' }).toUpperCase()}
                                 </p>
                                 <p className="text-xs font-black text-white truncate">{content?.title || 'Sin asignar'}</p>
                               </div>

@@ -1413,6 +1413,10 @@ export default function App() {
               books={dynamicBooks}
               audioInProgress={currentAudio}
               onSelectAudio={handleSelectAudio} 
+              onSelectBook={(book) => {
+                setSelectedBook(book);
+                handleTabChange('book-detail');
+              }}
               userPlan={providedPlan} 
               favorites={favorites}
               completedAudios={completedAudios}
