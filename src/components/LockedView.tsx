@@ -6,7 +6,7 @@
 import { Crown, Copy, CheckCircle2, MessageCircle } from 'lucide-react';
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AppConfig } from '../types';
+import { AppConfig, PlanConfig } from '../types';
 
 interface LockedViewProps {
   title: string;
@@ -15,14 +15,13 @@ interface LockedViewProps {
   appConfig?: AppConfig | null;
 }
 
-const PLANS = [
+const DEFAULT_PLANS: PlanConfig[] = [
   {
     id: 'annual',
     name: 'Plan Visionaria (Anual)',
     badge: 'RECOMENDADO',
     price: 3600,
-    subtitle: 'Equivale a $300/mes. ¡Ahorras $720!',
-    featured: true
+    subtitle: 'Equivale a $300/mes. ¡Ahorras $720!'
   },
   {
     id: 'semiannual',
@@ -39,7 +38,9 @@ const PLANS = [
 ];
 
 export default function LockedView({ title, description, buttonText, appConfig }: LockedViewProps) {
-  const [selectedPlan, setSelectedPlan] = useState<typeof PLANS[0] | null>(null);
+  // Usar los precios configurados por el Admin si existen; si no, los defaults.
+  const plans = (appConfig?.plans && appConfig.plans.length > 0) ? appConfig.plans : DEFAULT_PLANS;
+  const [selectedPlan, setSelectedPlan] = useState<PlanConfig | null>(null);
   const [copied, setCopied] = useState(false);
 
   const handleCopy = (text: string) => {
@@ -94,7 +95,7 @@ export default function LockedView({ title, description, buttonText, appConfig }
         {/* Pricing Cards - Ultra Clean & Airy */}
         <div className="space-y-10">
           <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-[0.5em] text-center mb-8">Selecciona tu nivel de compromiso</p>
-          {PLANS.map((plan) => (
+          {plans.map((plan) => (
             <button
               key={plan.id}
               onClick={() => setSelectedPlan(plan)}

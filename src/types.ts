@@ -68,6 +68,14 @@ export interface InspiraEvent {
   createdAt?: string;
 }
 
+export interface PlanConfig {
+  id: 'annual' | 'semiannual' | 'monthly';
+  name: string;
+  price: number;
+  subtitle: string;
+  badge?: string;
+}
+
 export interface AppConfig {
   id: string;
   whatsappVentas: string;
@@ -79,6 +87,7 @@ export interface AppConfig {
     cuenta: string;
     clabe: string;
   };
+  plans?: PlanConfig[]; // NUEVO: precios de planes editables desde Admin
   updatedAt?: string;
 }
 

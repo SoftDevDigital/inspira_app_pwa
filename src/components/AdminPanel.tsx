@@ -7,7 +7,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { User, UserRank, Audio, UserPlan, Speaker, InspiraEvent, AppConfig, UsageEvent, UsageSummary, EditorialSlot, Permissions, Book, Payment, SuccessPath, SuccessPathLevel } from '../types';
+import { User, UserRank, Audio, UserPlan, Speaker, InspiraEvent, AppConfig, UsageEvent, UsageSummary, EditorialSlot, Permissions, Book, Payment, SuccessPath, SuccessPathLevel, PlanConfig } from '../types';
 import { Search, Download, Filter, ArrowLeft, ArrowUpDown, Users, Star, Crown, Zap, TrendingUp, TrendingDown, Clock, PlayCircle, MessageCircle, Trophy, Plus, Upload, Trash2, CheckCircle2, AlertCircle, RefreshCw, Briefcase, UserPlus, Sparkles, Calendar, Video, Edit2, Settings, Landmark, MessageSquare, BarChart2, PieChart, CalendarDays, ZapOff, ArrowRight, BookOpen, X, ShieldCheck, Mail, Lock, Shield, User as UserIcon, Headphones, ChevronUp, ChevronDown, ListMusic, DollarSign, History } from 'lucide-react';
 import { SPEAKERS, MOCK_AUDIOS, CATEGORIES } from '../constants';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart as RechartsPieChart, Pie, Cell, BarChart, Bar } from 'recharts';
@@ -22,6 +22,12 @@ interface AdminPanelProps {
 type AdminTab = 'dashboard' | 'users' | 'audiobooks' | 'mentoring' | 'inventory' | 'talent' | 'events' | 'settings' | 'editorial' | 'staff' | 'equipo' | 'EQUIPO Y STAFF' | 'team' | 'commissions' | 'routes' | 'ranking';
 
 const SUPER_ADMIN_EMAIL = 'operaciones@inspiraapps.com';
+
+const DEFAULT_PLANS: PlanConfig[] = [
+  { id: 'annual', name: 'Plan Visionaria (Anual)', badge: 'RECOMENDADO', price: 3600, subtitle: 'Equivale a $300/mes. ¡Ahorras $720!' },
+  { id: 'semiannual', name: 'Plan Impulso (Semestral)', price: 1980, subtitle: 'Equivale a $330/mes.' },
+  { id: 'monthly', name: 'Plan Estándar (Mensual)', price: 360, subtitle: 'Pago recurrente.' }
+];
 
 const DASHBOARD_DATA = {
   dau: [
@@ -302,6 +308,41 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
   const [talentSuccess, setTalentSuccess] = useState(false);
   const [staffSuccess, setStaffSuccess] = useState(false);
   const [configSuccess, setConfigSuccess] = useState(false);
+
+  // --- Precios de Suscripción (editables por el Admin) ---
+  const [planEdits, setPlanEdits] = useState<PlanConfig[]>(appConfig?.plans || DEFAULT_PLANS);
+  const [isPlanSubmitting, setIsPlanSubmitting] = useState(false);
+  const [planSuccess, setPlanSuccess] = useState(false);
+
+  // Sincronizar los inputs de precios cuando llegue/actualice la config remota.
+  useEffect(() => {
+    if (appConfig?.plans && appConfig.plans.length > 0) {
+      setPlanEdits(appConfig.plans);
+    }
+  }, [appConfig?.plans]);
+
+  const handlePlanFieldChange = (index: number, field: keyof PlanConfig, value: string) => {
+    setPlanEdits(prev => prev.map((p, i) => {
+      if (i !== index) return p;
+      if (field === 'price') return { ...p, price: value === '' ? 0 : parseFloat(value) };
+      return { ...p, [field]: value };
+    }));
+  };
+
+  const handleSavePlans = async () => {
+    setIsPlanSubmitting(true);
+    setPlanSuccess(false);
+    try {
+      await configService.updateConfig({ plans: planEdits });
+      setPlanSuccess(true);
+      setUploadStatus({ type: 'success', message: 'Precios de los planes actualizados con éxito!' });
+      setTimeout(() => setPlanSuccess(false), 2500);
+    } catch (err) {
+      setUploadStatus({ type: 'error', message: 'Error al guardar los precios. Intentá de nuevo.' });
+    } finally {
+      setIsPlanSubmitting(false);
+    }
+  };
 
   const nayaHistoryItems = useMemo(() => {
     if (!audios && !books && !dynamicSpeakers) return [];
@@ -4395,6 +4436,79 @@ export default function AdminPanel({ onBack, currentUser }: AdminPanelProps) {
                     </button>
                   </form>
                 )}
+              </div>
+
+              {/* SECCIÓN: PRECIOS DE SUSCRIPCIÓN */}
+              <div className="bg-bg-card border border-border rounded-[32px] p-8 shadow-2xl space-y-8 mt-8">
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-bold text-white tracking-tight uppercase">💳 Precios de Suscripción</h3>
+                  <p className="text-text-dim text-sm font-bold uppercase tracking-widest">Precios de los Planes visibles para las usuarias</p>
+                </div>
+
+                <div className="space-y-6">
+                  {planEdits.map((plan, index) => (
+                    <div key={plan.id} className="space-y-4 p-6 rounded-[24px] bg-bg-deep border border-border">
+                      <div className="flex items-center gap-2 text-accent">
+                        <DollarSign size={18} />
+                        <h4 className="font-black uppercase tracking-widest text-xs">
+                          {plan.id === 'annual' ? 'Plan Anual' : plan.id === 'semiannual' ? 'Plan Semestral' : 'Plan Mensual'}
+                        </h4>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-text-dim ml-2">Nombre del Plan</label>
+                          <input
+                            type="text"
+                            value={plan.name}
+                            onChange={(e) => handlePlanFieldChange(index, 'name', e.target.value)}
+                            className="w-full bg-bg-card border border-border rounded-2xl py-4 px-6 text-text-main outline-none focus:border-accent transition-all"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-text-dim ml-2">Precio (MXN)</label>
+                          <input
+                            type="number"
+                            step="1"
+                            min="0"
+                            value={plan.price}
+                            onChange={(e) => handlePlanFieldChange(index, 'price', e.target.value)}
+                            className="w-full bg-bg-card border border-border rounded-2xl py-4 px-6 text-text-main outline-none focus:border-accent transition-all"
+                          />
+                        </div>
+                        <div className="space-y-2 md:col-span-2">
+                          <label className="text-[10px] font-black uppercase tracking-widest text-text-dim ml-2">Subtítulo / Descripción</label>
+                          <input
+                            type="text"
+                            value={plan.subtitle}
+                            onChange={(e) => handlePlanFieldChange(index, 'subtitle', e.target.value)}
+                            className="w-full bg-bg-card border border-border rounded-2xl py-4 px-6 text-text-main outline-none focus:border-accent transition-all"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleSavePlans}
+                  disabled={isPlanSubmitting}
+                  className="w-full bg-accent text-black py-5 rounded-[24px] font-black uppercase tracking-widest shadow-xl shadow-accent/20 active:scale-95 transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+                >
+                  {isPlanSubmitting ? (
+                    <>
+                      <RefreshCw size={20} className="animate-spin" />
+                      Guardando...
+                    </>
+                  ) : planSuccess ? (
+                    '¡PRECIOS GUARDADOS! ✅'
+                  ) : (
+                    <>
+                      <CheckCircle2 size={20} />
+                      Guardar Precios de Planes
+                    </>
+                  )}
+                </button>
               </div>
             </motion.div>
           )}
